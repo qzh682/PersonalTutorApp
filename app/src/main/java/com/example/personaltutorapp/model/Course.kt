@@ -6,5 +6,7 @@ data class Course(
     val description: String,
     val subject: String,
     val tutor: User,
-    val lessons: MutableList<Lesson>
+    val lessons: MutableList<Lesson> = mutableListOf(),
+    val enrolledUserIds: MutableList<String> = mutableListOf(),
+    val pendingUserIds: MutableList<String> = mutableListOf()
 )
