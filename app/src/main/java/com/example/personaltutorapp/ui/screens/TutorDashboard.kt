@@ -26,7 +26,7 @@ fun TutorDashboard(
     LaunchedEffect(courses) {
         courses.forEach { course ->
             val users = course.pendingUserIds.mapNotNull { userId ->
-                viewModel.getUserByIdSuspend(userId)
+                viewModel.getUserById(userId)
             }
             pendingUsersMap[course.id] = users
         }

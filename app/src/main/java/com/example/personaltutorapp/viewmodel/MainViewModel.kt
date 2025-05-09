@@ -1,6 +1,8 @@
 package com.example.personaltutorapp.viewmodel
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.personaltutorapp.data.AppDatabase
@@ -23,6 +25,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _allCourses = MutableStateFlow<List<Course>>(emptyList())
     val allCourses: StateFlow<List<Course>> = _allCourses
 
+    private val appContext = application.applicationContext
+
     init {
         viewModelScope.launch {
             refreshCourses()
@@ -35,8 +39,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             it.toCourseWithLessons(userDao, db.lessonDao(), db.lessonPageDao())
         }
     }
-
-
 
     fun register(
         email: String,
@@ -112,18 +114,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addLessonToCourse(courseId: String, title: String, pages: List<LessonPage>) = viewModelScope.launch {
         val course = getCourseById(courseId) ?: return@launch
 
-        // 1. 创建新 LessonEntity
         val lessonId = UUID.randomUUID().toString()
         val newLesson = LessonEntity(
             id = lessonId,
             courseId = courseId,
             title = title,
-            pages = emptyList(), // 页面单独存储
+            pages = emptyList(),
             completedByUserIds = emptyList()
         )
         db.lessonDao().insertLesson(newLesson)
 
-        // 2. 批量插入 LessonPageEntity
         pages.forEach { page ->
             val pageEntity = LessonPageEntity(
                 id = page.id,
@@ -134,10 +134,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             lessonPageDao.insertPage(pageEntity)
         }
 
-        // 3. 刷新数据
         refreshCourses()
+
+        course.enrolledUserIds.forEach { userId ->
+            val user = userDao.getUserById(userId)?.toUser()
+            user?.let {
+                sendEmail(it.email, "New Lesson: $title", "A new lesson has been added to your enrolled course: ${course.title}.")
+            }
+        }
     }
 
+    private fun sendEmail(to: String, subject: String, body: String) {
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("mailto:")
+            putExtra(Intent.EXTRA_EMAIL, arrayOf(to))
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (intent.resolveActivity(appContext.packageManager) != null) {
+            appContext.startActivity(intent)
+        }
+    }
 
     fun markLessonCompleted(courseId: String, lessonId: String) = viewModelScope.launch {
         val userId = _currentUser.value?.id ?: return@launch
@@ -177,9 +195,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun getPendingRequests(courseId: String): List<User> {
         val course = getCourseById(courseId)
-        return course?.pendingUserIds
-            ?.mapNotNull { userDao.getUserById(it)?.toUser() }
-            ?: emptyList()
+        return course?.pendingUserIds?.mapNotNull { userDao.getUserById(it)?.toUser() } ?: emptyList()
     }
 
     fun acceptEnrollment(courseId: String, userId: String) = viewModelScope.launch {
@@ -194,19 +210,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun rejectEnrollment(courseId: String, userId: String) = viewModelScope.launch {
         val course = getCourseById(courseId) ?: return@launch
-        val updatedCourse = course.copy(
-            pendingUserIds = (course.pendingUserIds - userId).toMutableList()
-        )
+        val updatedCourse = course.copy(pendingUserIds = (course.pendingUserIds - userId).toMutableList())
         courseDao.updateCourse(updatedCourse.toEntity())
         refreshCourses()
     }
 
-
     suspend fun getUserById(userId: String): User? {
-        return userDao.getUserById(userId)?.toUser()
-    }
-
-    suspend fun getUserByIdSuspend(userId: String): User? {
         return userDao.getUserById(userId)?.toUser()
     }
 
@@ -214,8 +223,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (userId == null) return false
         return index == 0 || lessons[index - 1].completedByUserIds.contains(userId)
     }
-
-    // 🔽 LessonPage 数据持久化操作
 
     fun addLessonPage(lessonId: String, type: PageType, content: String) = viewModelScope.launch {
         val page = LessonPageEntity(

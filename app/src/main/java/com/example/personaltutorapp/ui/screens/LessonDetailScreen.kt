@@ -1,18 +1,24 @@
 package com.example.personaltutorapp.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.personaltutorapp.model.PageType
 import com.example.personaltutorapp.viewmodel.MainViewModel
+import android.webkit.WebView
+import android.webkit.WebViewClient
 
 @Composable
 fun LessonDetailScreen(
@@ -21,6 +27,7 @@ fun LessonDetailScreen(
     navController: NavController,
     viewModel: MainViewModel
 ) {
+    val context = LocalContext.current
     val lesson = viewModel.getCourseById(courseId)?.lessons?.find { it.id == lessonId }
 
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -47,15 +54,58 @@ fun LessonDetailScreen(
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
                     }
+
                     PageType.IMAGE -> {
                         Image(
                             painter = rememberAsyncImagePainter(page.content),
-                            contentDescription = "Lesson image",
-                            contentScale = ContentScale.Crop,
+                            contentDescription = "Lesson Image",
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(220.dp)
                                 .padding(vertical = 8.dp)
+                        )
+                    }
+
+                    PageType.PDF -> {
+                        Text(
+                            text = "View PDF",
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .clickable {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(page.content))
+                                    context.startActivity(intent)
+                                }
+                        )
+                    }
+
+                    PageType.AUDIO -> {
+                        Text(
+                            text = "Play Audio",
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .clickable {
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(Uri.parse(page.content), "audio/*")
+                                    }
+                                    context.startActivity(intent)
+                                }
+                        )
+                    }
+
+                    PageType.VIDEO -> {
+                        Text(
+                            text = "Watch Video",
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .clickable {
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(Uri.parse(page.content), "video/*")
+                                    }
+                                    context.startActivity(intent)
+                                }
                         )
                     }
                 }

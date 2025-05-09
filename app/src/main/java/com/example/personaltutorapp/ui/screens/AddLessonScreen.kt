@@ -1,5 +1,6 @@
 package com.example.personaltutorapp.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -10,8 +11,7 @@ import androidx.navigation.NavController
 import com.example.personaltutorapp.model.LessonPage
 import com.example.personaltutorapp.model.PageType
 import com.example.personaltutorapp.viewmodel.MainViewModel
-import java.util.UUID
-import androidx.compose.foundation.clickable
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,13 +20,15 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
     var pageType by remember { mutableStateOf(PageType.TEXT) }
     var pageContent by remember { mutableStateOf("") }
     var pages by remember { mutableStateOf(mutableListOf<LessonPage>()) }
+    var expanded by remember { mutableStateOf(false) }
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .padding(24.dp)
                 .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("Add Lesson", style = MaterialTheme.typography.headlineMedium)
 
@@ -38,12 +40,9 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
             )
 
             ExposedDropdownMenuBox(
-                expanded = false,
-                onExpandedChange = {},
-                modifier = Modifier.fillMaxWidth()
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded }
             ) {
-                var expanded by remember { mutableStateOf(false) }
-
                 OutlinedTextField(
                     value = pageType.name,
                     onValueChange = {},
@@ -53,9 +52,8 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                     modifier = Modifier
                         .fillMaxWidth()
                         .menuAnchor()
-                        .clickable { expanded = !expanded }
+                        .clickable { expanded = true }
                 )
-
                 ExposedDropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false }
@@ -75,7 +73,17 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
             OutlinedTextField(
                 value = pageContent,
                 onValueChange = { pageContent = it },
-                label = { Text("Page Content (Text or Image URL)") },
+                label = {
+                    Text(
+                        when (pageType) {
+                            PageType.TEXT -> "Enter Text"
+                            PageType.IMAGE -> "Enter Image URL"
+                            PageType.PDF -> "Enter PDF URL"
+                            PageType.AUDIO -> "Enter MP3 URL"
+                            PageType.VIDEO -> "Enter MP4 URL"
+                        }
+                    )
+                },
                 modifier = Modifier.fillMaxWidth()
             )
 
