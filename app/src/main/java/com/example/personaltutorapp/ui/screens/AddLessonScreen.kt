@@ -1,7 +1,6 @@
 package com.example.personaltutorapp.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,7 +11,9 @@ import com.example.personaltutorapp.model.LessonPage
 import com.example.personaltutorapp.model.PageType
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import java.util.UUID
+import androidx.compose.foundation.clickable
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddLessonScreen(courseId: String, navController: NavController, viewModel: MainViewModel) {
     var title by remember { mutableStateOf("") }
@@ -20,77 +21,99 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
     var pageContent by remember { mutableStateOf("") }
     var pages by remember { mutableStateOf(mutableListOf<LessonPage>()) }
 
-    Column(
-        modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("Add Lesson", style = MaterialTheme.typography.headlineMedium)
-
-        OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            label = { Text("Lesson Title") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Page Type:")
-            Spacer(modifier = Modifier.width(8.dp))
-            DropdownMenuBox(
-                selectedType = pageType,
-                onSelect = { pageType = it }
-            )
-        }
-
-        OutlinedTextField(
-            value = pageContent,
-            onValueChange = { pageContent = it },
-            label = { Text("Page Content (Text or Image URL)") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Button(onClick = {
-            pages.add(
-                LessonPage(
-                    id = UUID.randomUUID().toString(),
-                    type = pageType,
-                    content = pageContent
-                )
-            )
-            pageContent = ""
-        }) {
-            Text("Add Page")
-        }
-
-        Button(
-            onClick = {
-                viewModel.addLessonToCourse(courseId, title, pages)
-                navController.popBackStack()
-            },
-            modifier = Modifier.fillMaxWidth()
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .padding(24.dp)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Save Lesson")
-        }
-    }
-}
+            Text("Add Lesson", style = MaterialTheme.typography.headlineMedium)
 
-@Composable
-fun DropdownMenuBox(selectedType: PageType, onSelect: (PageType) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Lesson Title") },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-    Box {
-        Button(onClick = { expanded = true }) {
-            Text(selectedType.name)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text("TEXT") }, onClick = {
-                onSelect(PageType.TEXT)
-                expanded = false
-            })
-            DropdownMenuItem(text = { Text("IMAGE") }, onClick = {
-                onSelect(PageType.IMAGE)
-                expanded = false
-            })
+            ExposedDropdownMenuBox(
+                expanded = false,
+                onExpandedChange = {},
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                var expanded by remember { mutableStateOf(false) }
+
+                OutlinedTextField(
+                    value = pageType.name,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Page Type") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                        .clickable { expanded = !expanded }
+                )
+
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    PageType.values().forEach {
+                        DropdownMenuItem(
+                            text = { Text(it.name) },
+                            onClick = {
+                                pageType = it
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = pageContent,
+                onValueChange = { pageContent = it },
+                label = { Text("Page Content (Text or Image URL)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Button(
+                onClick = {
+                    if (pageContent.isNotBlank()) {
+                        pages.add(
+                            LessonPage(
+                                id = UUID.randomUUID().toString(),
+                                type = pageType,
+                                content = pageContent
+                            )
+                        )
+                        pageContent = ""
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Add Page to Lesson")
+            }
+
+            if (pages.isNotEmpty()) {
+                Text("Pages Added: ${pages.size}", style = MaterialTheme.typography.bodyMedium)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    if (title.isNotBlank() && pages.isNotEmpty()) {
+                        viewModel.addLessonToCourse(courseId, title, pages)
+                        navController.popBackStack()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Save Lesson")
+            }
         }
     }
 }

@@ -21,67 +21,82 @@ fun LoginScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val currentUser by viewModel.currentUser.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text("Login", style = MaterialTheme.typography.headlineMedium)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = {
-                val success = viewModel.login(email, password)
-                if (success) {
-                    if (currentUser?.role == "Tutor") {
-                        navController.navigate(NavRoutes.TutorDashboard.route)
-                    } else {
-                        navController.navigate(NavRoutes.StudentDashboard.route)
-                    }
-                } else {
-                    errorMessage = "Invalid credentials"
-                }
-            },
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
+                .fillMaxSize()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Text("Login")
-        }
+            Text(
+                "Login",
+                style = MaterialTheme.typography.headlineLarge
+            )
 
-        errorMessage?.let {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
             Spacer(modifier = Modifier.height(12.dp))
-            Text(text = it, color = MaterialTheme.colorScheme.error)
-        }
 
-        Spacer(modifier = Modifier.height(24.dp))
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
 
-        TextButton(onClick = {
-            navController.navigate(NavRoutes.Register.route)
-        }) {
-            Text("Don't have an account? Register")
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = {
+                    viewModel.login(email, password) { success ->
+                        if (success) {
+                            val destination = if (viewModel.currentUser.value?.role == "Tutor") {
+                                NavRoutes.TutorDashboard.route
+                            } else {
+                                NavRoutes.StudentDashboard.route
+                            }
+                            navController.navigate(destination) {
+                                popUpTo(NavRoutes.Login.route) { inclusive = true }
+                            }
+                        } else {
+                            errorMessage = "Invalid credentials. Please try again."
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+            ) {
+                Text("Login")
+            }
+
+            errorMessage?.let {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            TextButton(
+                onClick = { navController.navigate(NavRoutes.Register.route) }
+            ) {
+                Text("Don't have an account? Register here")
+            }
         }
     }
 }

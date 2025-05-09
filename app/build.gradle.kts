@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.kapt") // KAPT 插件必须保留
 }
 
 android {
@@ -52,4 +53,12 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.6.5")
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // ✅ Room 正确集成方式
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
+
+    // ✅ Gson 用于 List 类型转换
+    implementation("com.google.code.gson:gson:2.10.1")
 }
