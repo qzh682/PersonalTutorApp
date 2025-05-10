@@ -18,4 +18,18 @@ sealed class NavRoutes(val route: String) {
     object LessonDetail : NavRoutes("lesson_detail/{courseId}/{lessonId}") {
         fun createRoute(courseId: String, lessonId: String) = "lesson_detail/$courseId/$lessonId"
     }
+
+    object Quiz : NavRoutes("quiz/{courseId}") {
+        fun createRoute(courseId: String) = "quiz/$courseId"
+    }
+
+    object TakeQuiz : NavRoutes("take_quiz/{courseId}") {
+        fun createRoute(courseId: String) = "take_quiz/$courseId"
+    }
+
+    object QuizResults : NavRoutes("quiz_results/{courseId}") {
+        fun createRoute(courseId: String) = "quiz_results/$courseId"
+    }
+
+
 }

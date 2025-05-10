@@ -53,6 +53,17 @@ fun CourseDetailScreen(
                     Text("Add Lesson")
                 }
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        navController.navigate("quiz_results/$courseId")
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("View Quiz Results")
+                }
+
                 if (pendingUsers.value.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Text("Pending Enrolment Requests", style = MaterialTheme.typography.titleMedium)

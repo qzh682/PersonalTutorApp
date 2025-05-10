@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
+import com.example.personaltutorapp.model.toEntity
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -18,6 +19,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val userDao = db.userDao()
     private val courseDao = db.courseDao()
     private val lessonPageDao = db.lessonPageDao()
+    private val quizSubmissionDao = db.quizSubmissionDao()
 
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser
@@ -36,7 +38,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun refreshCourses() {
         val entities = courseDao.getAllCourses()
         _allCourses.value = entities.map {
-            it.toCourseWithLessons(userDao, db.lessonDao(), db.lessonPageDao())
+            it.toCourseWithLessons(userDao, db.lessonDao(), db.lessonPageDao(), db.quizDao(), db.quizQuestionDao(), db.quizSubmissionDao())
         }
     }
 
@@ -245,4 +247,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun getLessonPages(lessonId: String): List<LessonPageEntity> {
         return lessonPageDao.getPagesForLesson(lessonId)
     }
+
+
+    data class QuizResult(val studentName: String, val score: Int, val total: Int)
+
+    suspend fun getQuizResults(courseId: String): List<QuizResult> {
+        val course = getCourseById(courseId) ?: return emptyList()
+        val quiz = course.quiz ?: return emptyList()
+        val total = quiz.questions.size
+
+        return quiz.submissions.mapNotNull { submission ->
+            val user = userDao.getUserById(submission.userId)?.toUser()
+            user?.let {
+                QuizResult(
+                    studentName = it.displayName,
+                    score = submission.score,
+                    total = total
+                )
+            }
+        }
+    }
+
+    fun submitQuizResult(courseId: String, userId: String, score: Int) = viewModelScope.launch {
+        val quiz = db.quizDao().getQuizForCourse(courseId)
+        val existing = quizSubmissionDao.getSubmission(userId, courseId)
+        if (existing != null) {
+            quizSubmissionDao.deleteSubmission(existing)
+        }
+        val submission = QuizSubmissionEntity(
+            id = UUID.randomUUID().toString(),
+            courseId = courseId,
+            userId = userId,
+            score = score
+        )
+        quizSubmissionDao.insertSubmission(submission)
+        refreshCourses()
+    }
+
+
+    fun addQuizToCourse(courseId: String, questions: List<QuizQuestion>) = viewModelScope.launch {
+        val course = getCourseById(courseId) ?: return@launch
+
+        val quizId = UUID.randomUUID().toString()
+
+        val quizEntity = QuizEntity(
+            id = quizId,
+            courseId = courseId,
+            questions = emptyList(),
+            submissions = emptyList()
+        )
+        db.quizDao().insertQuiz(quizEntity)
+
+        val questionEntities = questions.map { it.toEntity(quizId) }
+        db.quizQuestionDao().insertAll(questionEntities)
+
+        refreshCourses()
+    }
+
+
 }

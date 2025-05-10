@@ -2,22 +2,19 @@ package com.example.personaltutorapp.data
 
 import android.content.Context
 import androidx.room.*
-import com.example.personaltutorapp.data.dao.CourseDao
-import com.example.personaltutorapp.data.dao.LessonDao
-import com.example.personaltutorapp.data.dao.LessonPageDao
-import com.example.personaltutorapp.data.dao.UserDao
+import com.example.personaltutorapp.data.dao.*
 import com.example.personaltutorapp.db.Converters
-import com.example.personaltutorapp.model.CourseEntity
-import com.example.personaltutorapp.model.LessonEntity
-import com.example.personaltutorapp.model.LessonPageEntity
-import com.example.personaltutorapp.model.UserEntity
+import com.example.personaltutorapp.model.*
 
 @Database(
     entities = [
         UserEntity::class,
         CourseEntity::class,
         LessonEntity::class,
-        LessonPageEntity::class
+        LessonPageEntity::class,
+        QuizEntity::class,
+        QuizQuestionEntity::class,
+        QuizSubmissionEntity::class
     ],
     version = 1,
     exportSchema = false
@@ -29,6 +26,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
     abstract fun lessonDao(): LessonDao
     abstract fun lessonPageDao(): LessonPageDao
+    abstract fun quizDao(): QuizDao
+    abstract fun quizQuestionDao(): QuizQuestionDao
+    abstract fun quizSubmissionDao(): QuizSubmissionDao
 
     companion object {
         @Volatile

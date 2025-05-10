@@ -65,6 +65,15 @@ fun TutorDashboard(
                     Text("Enrolled Students: $enrolledCount", style = MaterialTheme.typography.bodyMedium)
                     Text("Average Progress: $avgProgress%", style = MaterialTheme.typography.bodyMedium)
                     ProgressBar(percentage = avgProgress)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            navController.navigate("quiz_results/${course.id}")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("View Quiz Results")
+                    }
                 }
             }
 

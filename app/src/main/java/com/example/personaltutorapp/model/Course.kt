@@ -8,5 +8,6 @@ data class Course(
     val tutor: User,
     val lessons: MutableList<Lesson> = mutableListOf(),
     val enrolledUserIds: MutableList<String> = mutableListOf(),
-    val pendingUserIds: MutableList<String> = mutableListOf()
+    val pendingUserIds: MutableList<String> = mutableListOf(),
+    val quiz: Quiz? = null
 )

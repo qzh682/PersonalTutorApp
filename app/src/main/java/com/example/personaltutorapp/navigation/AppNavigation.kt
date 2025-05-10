@@ -84,6 +84,40 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
                 ErrorScreen("Invalid lesson or course ID", navController)
             }
         }
+
+        composable(
+            route = NavRoutes.Quiz.route,
+            arguments = listOf(navArgument("courseId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val courseId = backStackEntry.arguments?.getString("courseId") ?: return@composable
+            QuizScreen(courseId = courseId, navController = navController, viewModel = viewModel)
+        }
+
+        composable(
+            route = NavRoutes.TakeQuiz.route,
+            arguments = listOf(navArgument("courseId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val courseId = backStackEntry.arguments?.getString("courseId") ?: return@composable
+            TakeQuizScreen(courseId = courseId, navController = navController, viewModel = viewModel)
+        }
+
+        composable(
+            route = NavRoutes.QuizResults.route,
+            arguments = listOf(navArgument("courseId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val courseId = backStackEntry.arguments?.getString("courseId") ?: return@composable
+            QuizResultsScreen(courseId = courseId, navController = navController, viewModel = viewModel)
+        }
+
+        composable(
+            route = "quiz_results/{courseId}",
+            arguments = listOf(navArgument("courseId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val courseId = backStackEntry.arguments?.getString("courseId") ?: return@composable
+            QuizResultsScreen(courseId = courseId, navController = navController, viewModel = viewModel)
+        }
+
+
     }
 }
 
@@ -107,5 +141,5 @@ fun ErrorScreen(message: String, navController: NavHostController) {
     }
 }
 
-// 你已经定义好的 NavRoutes 对象应如下保持一致：
+
 
