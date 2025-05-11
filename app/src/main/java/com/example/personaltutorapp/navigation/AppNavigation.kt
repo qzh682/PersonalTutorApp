@@ -46,16 +46,17 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
         }
 
         composable(
-            route = NavRoutes.CourseDetail.route,
+            route = "${NavRoutes.CourseDetail}/{courseId}",
             arguments = listOf(navArgument("courseId") { type = NavType.StringType })
         ) { backStackEntry ->
             val courseId = backStackEntry.arguments?.getString("courseId")
-            if (courseId != null) {
+            if (!courseId.isNullOrEmpty()) {
                 CourseDetailScreen(courseId, navController, viewModel)
             } else {
                 ErrorScreen("Invalid course ID", navController)
             }
         }
+
 
         composable(
             route = NavRoutes.AddLesson.route,

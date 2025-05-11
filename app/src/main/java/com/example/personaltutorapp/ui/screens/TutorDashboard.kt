@@ -13,6 +13,7 @@ import com.example.personaltutorapp.model.Course
 import com.example.personaltutorapp.model.User
 import com.example.personaltutorapp.navigation.NavRoutes
 import com.example.personaltutorapp.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun TutorDashboard(
@@ -22,13 +23,17 @@ fun TutorDashboard(
     val currentUser by viewModel.currentUser.collectAsState()
     val courses = viewModel.getCoursesForCurrentUser()
     val pendingUsersMap = remember { mutableStateMapOf<String, List<User>>() }
+    val coroutineScope = rememberCoroutineScope()
 
+    // ✅ 加载 pending users（推荐异步）
     LaunchedEffect(courses) {
         courses.forEach { course ->
-            val users = course.pendingUserIds.mapNotNull { userId ->
-                viewModel.getUserById(userId)
+            coroutineScope.launch {
+                val users = course.pendingUserIds.mapNotNull { userId ->
+                    viewModel.getUserById(userId)
+                }
+                pendingUsersMap[course.id] = users
             }
-            pendingUsersMap[course.id] = users
         }
     }
 
@@ -43,8 +48,11 @@ fun TutorDashboard(
         Spacer(modifier = Modifier.height(24.dp))
 
         courses.forEach { course ->
-            CourseCard(course = course) {
-                navController.navigate("${NavRoutes.CourseDetail.route}/${course.id}")
+            // ✅ 安全跳转逻辑
+            if (course.id.isNotBlank()) {
+                CourseCard(course = course) {
+                    navController.navigate("${NavRoutes.CourseDetail}/${course.id}")
+                }
             }
 
             val totalLessons = course.lessons.size
@@ -68,7 +76,7 @@ fun TutorDashboard(
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = {
-                            navController.navigate("quiz_results/${course.id}")
+                            navController.navigate("${NavRoutes.QuizResults}/${course.id}")
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {

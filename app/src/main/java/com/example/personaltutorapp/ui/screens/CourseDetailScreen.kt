@@ -8,9 +8,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.personaltutorapp.viewmodel.MainViewModel
-import com.example.personaltutorapp.navigation.NavRoutes
 import com.example.personaltutorapp.model.User
+import com.example.personaltutorapp.navigation.NavRoutes
+import com.example.personaltutorapp.viewmodel.MainViewModel
 
 @Composable
 fun CourseDetailScreen(
@@ -18,15 +18,15 @@ fun CourseDetailScreen(
     navController: NavController,
     viewModel: MainViewModel
 ) {
-    val currentUser = viewModel.currentUser.collectAsState().value
-    val course = remember { viewModel.getCourseById(courseId) }
+    val currentUser by viewModel.currentUser.collectAsState()
+    val allCourses by viewModel.allCourses.collectAsState()
+    val course = allCourses.find { it.id == courseId }
 
     val pendingUsers = remember { mutableStateOf<List<User>>(emptyList()) }
 
     LaunchedEffect(courseId) {
-        viewModel.getPendingRequests(courseId)?.let {
-            pendingUsers.value = it
-        }
+        val result = viewModel.getPendingRequests(courseId)
+        pendingUsers.value = result
     }
 
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -45,9 +45,7 @@ fun CourseDetailScreen(
 
             if (currentUser?.id == course.tutor.id) {
                 Button(
-                    onClick = {
-                        navController.navigate("${NavRoutes.AddLesson.route}/$courseId")
-                    },
+                    onClick = { navController.navigate("${NavRoutes.AddLesson.route}/$courseId") },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Add Lesson")
@@ -56,9 +54,7 @@ fun CourseDetailScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Button(
-                    onClick = {
-                        navController.navigate("quiz_results/$courseId")
-                    },
+                    onClick = { navController.navigate("quiz_results/$courseId") },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("View Quiz Results")
