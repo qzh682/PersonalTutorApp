@@ -1,6 +1,7 @@
 package com.example.personaltutorapp.navigation
 
 sealed class NavRoutes(val route: String) {
+
     object Login : NavRoutes("login")
     object Register : NavRoutes("register")
     object StudentDashboard : NavRoutes("student_dashboard")
@@ -16,7 +17,8 @@ sealed class NavRoutes(val route: String) {
     }
 
     object LessonDetail : NavRoutes("lesson_detail/{courseId}/{lessonId}") {
-        fun createRoute(courseId: String, lessonId: String) = "lesson_detail/$courseId/$lessonId"
+        fun createRoute(courseId: String, lessonId: String) =
+            "lesson_detail/$courseId/$lessonId"
     }
 
     object Quiz : NavRoutes("quiz/{courseId}") {
@@ -30,6 +32,4 @@ sealed class NavRoutes(val route: String) {
     object QuizResults : NavRoutes("quiz_results/{courseId}") {
         fun createRoute(courseId: String) = "quiz_results/$courseId"
     }
-
-
 }

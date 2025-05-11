@@ -25,7 +25,7 @@ fun TutorDashboard(
     val pendingUsersMap = remember { mutableStateMapOf<String, List<User>>() }
     val coroutineScope = rememberCoroutineScope()
 
-    // ✅ 加载 pending users（推荐异步）
+    // ✅ 异步加载每门课程的 pending users
     LaunchedEffect(courses) {
         courses.forEach { course ->
             coroutineScope.launch {
@@ -48,10 +48,9 @@ fun TutorDashboard(
         Spacer(modifier = Modifier.height(24.dp))
 
         courses.forEach { course ->
-            // ✅ 安全跳转逻辑
             if (course.id.isNotBlank()) {
                 CourseCard(course = course) {
-                    navController.navigate("${NavRoutes.CourseDetail}/${course.id}")
+                    navController.navigate(NavRoutes.CourseDetail.createRoute(course.id))
                 }
             }
 
@@ -76,7 +75,7 @@ fun TutorDashboard(
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = {
-                            navController.navigate("${NavRoutes.QuizResults}/${course.id}")
+                            navController.navigate(NavRoutes.QuizResults.createRoute(course.id))
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {

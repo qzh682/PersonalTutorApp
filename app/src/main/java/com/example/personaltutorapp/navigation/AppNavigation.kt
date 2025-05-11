@@ -8,18 +8,13 @@ import androidx.navigation.compose.rememberNavController
 import com.example.personaltutorapp.ui.screens.*
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import androidx.compose.material3.Scaffold
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.Alignment
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.Spacer
-import androidx. compose. material3.Button
+import androidx.compose.material3.Button
+import androidx.compose.ui.Alignment
 
 @Composable
 fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = rememberNavController()) {
@@ -46,7 +41,7 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
         }
 
         composable(
-            route = "${NavRoutes.CourseDetail}/{courseId}",
+            route = NavRoutes.CourseDetail.route,
             arguments = listOf(navArgument("courseId") { type = NavType.StringType })
         ) { backStackEntry ->
             val courseId = backStackEntry.arguments?.getString("courseId")
@@ -57,16 +52,15 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
             }
         }
 
-
         composable(
             route = NavRoutes.AddLesson.route,
             arguments = listOf(navArgument("courseId") { type = NavType.StringType })
         ) { backStackEntry ->
             val courseId = backStackEntry.arguments?.getString("courseId")
-            if (courseId != null) {
-                AddLessonScreen(courseId, navController, viewModel)
+            if (!courseId.isNullOrEmpty()) {
+                AddLessonScreen(courseId = courseId, navController = navController, viewModel = viewModel)
             } else {
-                ErrorScreen("Invalid course ID for lesson", navController)
+                ErrorScreen("Invalid course ID", navController)
             }
         }
 
@@ -79,7 +73,7 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
         ) { backStackEntry ->
             val courseId = backStackEntry.arguments?.getString("courseId")
             val lessonId = backStackEntry.arguments?.getString("lessonId")
-            if (courseId != null && lessonId != null) {
+            if (!courseId.isNullOrEmpty() && !lessonId.isNullOrEmpty()) {
                 LessonDetailScreen(courseId, lessonId, navController, viewModel)
             } else {
                 ErrorScreen("Invalid lesson or course ID", navController)
@@ -90,35 +84,37 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
             route = NavRoutes.Quiz.route,
             arguments = listOf(navArgument("courseId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val courseId = backStackEntry.arguments?.getString("courseId") ?: return@composable
-            QuizScreen(courseId = courseId, navController = navController, viewModel = viewModel)
+            val courseId = backStackEntry.arguments?.getString("courseId")
+            if (!courseId.isNullOrEmpty()) {
+                QuizScreen(courseId = courseId, navController = navController, viewModel = viewModel)
+            } else {
+                ErrorScreen("Invalid course ID for quiz", navController)
+            }
         }
 
         composable(
             route = NavRoutes.TakeQuiz.route,
             arguments = listOf(navArgument("courseId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val courseId = backStackEntry.arguments?.getString("courseId") ?: return@composable
-            TakeQuizScreen(courseId = courseId, navController = navController, viewModel = viewModel)
+            val courseId = backStackEntry.arguments?.getString("courseId")
+            if (!courseId.isNullOrEmpty()) {
+                TakeQuizScreen(courseId = courseId, navController = navController, viewModel = viewModel)
+            } else {
+                ErrorScreen("Invalid course ID for quiz", navController)
+            }
         }
 
         composable(
             route = NavRoutes.QuizResults.route,
             arguments = listOf(navArgument("courseId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val courseId = backStackEntry.arguments?.getString("courseId") ?: return@composable
-            QuizResultsScreen(courseId = courseId, navController = navController, viewModel = viewModel)
+            val courseId = backStackEntry.arguments?.getString("courseId")
+            if (!courseId.isNullOrEmpty()) {
+                QuizResultsScreen(courseId = courseId, navController = navController, viewModel = viewModel)
+            } else {
+                ErrorScreen("Invalid course ID for results", navController)
+            }
         }
-
-        composable(
-            route = "quiz_results/{courseId}",
-            arguments = listOf(navArgument("courseId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val courseId = backStackEntry.arguments?.getString("courseId") ?: return@composable
-            QuizResultsScreen(courseId = courseId, navController = navController, viewModel = viewModel)
-        }
-
-
     }
 }
 
@@ -141,6 +137,3 @@ fun ErrorScreen(message: String, navController: NavHostController) {
         }
     }
 }
-
-
-

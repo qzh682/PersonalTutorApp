@@ -45,7 +45,9 @@ fun CourseDetailScreen(
 
             if (currentUser?.id == course.tutor.id) {
                 Button(
-                    onClick = { navController.navigate("${NavRoutes.AddLesson.route}/$courseId") },
+                    onClick = {
+                        navController.navigate(NavRoutes.AddLesson.createRoute(courseId))
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Add Lesson")
@@ -54,7 +56,9 @@ fun CourseDetailScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Button(
-                    onClick = { navController.navigate("quiz_results/$courseId") },
+                    onClick = {
+                        navController.navigate(NavRoutes.QuizResults.createRoute(courseId))
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("View Quiz Results")
@@ -98,7 +102,6 @@ fun CourseDetailScreen(
                     }
                 }
             } else {
-                // For Students
                 val isEnrolled = course.enrolledUserIds.contains(currentUser?.id)
                 val isPending = course.pendingUserIds.contains(currentUser?.id)
 
@@ -136,7 +139,9 @@ fun CourseDetailScreen(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
                         .clickable(enabled = unlocked) {
-                            navController.navigate("${NavRoutes.LessonDetail.route}/$courseId/${lesson.id}")
+                            navController.navigate(
+                                NavRoutes.LessonDetail.createRoute(courseId, lesson.id)
+                            )
                         },
                     colors = CardDefaults.cardColors(
                         containerColor = if (unlocked)
