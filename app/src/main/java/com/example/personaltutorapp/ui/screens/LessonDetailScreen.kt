@@ -1,6 +1,8 @@
 package com.example.personaltutorapp.ui.screens
 
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -18,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
 import com.example.personaltutorapp.model.PageType
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
@@ -37,21 +40,71 @@ fun LessonDetailScreen(
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // 验证参数
+    LaunchedEffect(courseId, lessonId) {
+        if (courseId.isBlank()) {
+            println("Error: courseId is blank")
+            errorMessage = "Invalid course ID"
+            isLoading = false
+        }
+        if (lessonId.isBlank()) {
+            println("Error: lessonId is blank")
+            errorMessage = "Invalid lesson ID"
+            isLoading = false
+        }
+    }
+
+    // 检查网络状态
+    var isNetworkAvailable by remember { mutableStateOf(false) }
+    try {
+        val connectivityManager = context.getSystemService(ConnectivityManager::class.java)
+        isNetworkAvailable = connectivityManager?.let {
+            val network = it.activeNetwork ?: return@let false
+            val capabilities = it.getNetworkCapabilities(network) ?: return@let false
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } ?: false
+        println("Network available: $isNetworkAvailable")
+    } catch (e: SecurityException) {
+        println("Failed to check network state: ${e.message}")
+        isNetworkAvailable = false
+        errorMessage = "Cannot check network state: Missing ACCESS_NETWORK_STATE permission"
+    } catch (e: Exception) {
+        println("Unexpected error while checking network state: ${e.message}")
+        isNetworkAvailable = false
+        errorMessage = "Error checking network state: ${e.message}"
+    }
+
     // 🔄 自动随 allCourses 更新的 lesson 引用
     val lesson by remember(allCourses, courseId, lessonId) {
         derivedStateOf {
-            allCourses.find { it.id == courseId }?.lessons?.find { it.id == lessonId }
+            println("Finding lesson: courseId=$courseId, lessonId=$lessonId")
+            val course = allCourses.find { it.id == courseId }
+            if (course == null) {
+                println("Course $courseId not found in allCourses: ${allCourses.map { it.id }}")
+            }
+            val foundLesson = course?.lessons?.find { it.id == lessonId }
+            if (foundLesson == null) {
+                println("Lesson $lessonId not found in course $courseId")
+            }
+            foundLesson
         }
     }
 
     // 强制刷新数据
     LaunchedEffect(Unit) {
-        viewModel.refreshAllCourses()
+        println("Refreshing all courses on LessonDetailScreen entry")
+        try {
+            viewModel.refreshAllCourses()
+        } catch (e: Exception) {
+            println("Failed to refresh courses: ${e.message}")
+            errorMessage = "Failed to load lesson data: ${e.message}"
+            isLoading = false
+        }
     }
 
     // 调试 lesson 数据
     LaunchedEffect(lesson) {
-        println("Lesson pages: ${lesson?.pages}")
+        println("Lesson data updated: $lesson")
         isLoading = false
     }
 
@@ -62,7 +115,21 @@ fun LessonDetailScreen(
                 .fillMaxSize(),
             verticalArrangement = Arrangement.Top
         ) {
-            if (isLoading) {
+            if (errorMessage != null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = errorMessage ?: "An error occurred",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.semantics {
+                            testTag = "error_message"
+                            contentDescription = "Error message"
+                        }
+                    )
+                }
+            } else if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -80,7 +147,7 @@ fun LessonDetailScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Lesson not found",
+                        text = "Lesson not found. Course ID: $courseId, Lesson ID: $lessonId",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.semantics {
                             testTag = "lesson_not_found"
@@ -136,70 +203,110 @@ fun LessonDetailScreen(
                                             )
                                         }
                                         PageType.IMAGE -> {
-                                            var retryTrigger by remember { mutableStateOf(0) } // 用于触发重试
-                                            // 使用 retryTrigger 修改 model，触发重新加载
-                                            val imageModel by remember(retryTrigger) {
-                                                mutableStateOf(page.content + "?retry=$retryTrigger")
-                                            }
-                                            val painter = rememberAsyncImagePainter(
-                                                model = imageModel,
-                                                placeholder = painterResource(id = try { R.drawable.placeholder } catch (e: Exception) { android.R.drawable.ic_menu_gallery }),
-                                                error = painterResource(id = try { R.drawable.error_image } catch (e: Exception) { android.R.drawable.ic_menu_report_image }),
-                                                onLoading = { println("Loading image: ${page.content}, retryTrigger: $retryTrigger") },
-                                                onSuccess = { println("Image loaded successfully: ${page.content}") },
-                                                onError = { error ->
-                                                    val errorMsg = "Failed to load image: ${page.content}. Reason: ${error.result.throwable.message}"
-                                                    println(errorMsg)
-                                                    errorMessage = errorMsg
-                                                }
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(220.dp)
-                                            ) {
-                                                Image(
-                                                    painter = painter,
-                                                    contentDescription = "Lesson image",
+                                            if (!isNetworkAvailable) {
+                                                Column(
                                                     modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .semantics {
-                                                            testTag = "image_page_${page.id}"
+                                                        .fillMaxWidth()
+                                                        .height(220.dp),
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    verticalArrangement = Arrangement.Center
+                                                ) {
+                                                    Text(
+                                                        text = "No internet connection",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        modifier = Modifier.semantics {
+                                                            testTag = "no_internet_${page.id}"
+                                                            contentDescription = "No internet connection"
                                                         }
-                                                )
-                                                when (painter.state) {
-                                                    is AsyncImagePainter.State.Loading -> {
-                                                        CircularProgressIndicator(
-                                                            modifier = Modifier
-                                                                .align(Alignment.Center)
-                                                                .size(32.dp)
-                                                        )
+                                                    )
+                                                }
+                                            } else {
+                                                var retryTrigger by remember { mutableStateOf(0) }
+                                                var isImageLoaded by remember { mutableStateOf(false) }
+                                                val imageModel by remember(retryTrigger) {
+                                                    mutableStateOf(page.content + "?retry=$retryTrigger")
+                                                }
+                                                val painter = rememberAsyncImagePainter(
+                                                    model = ImageRequest.Builder(context)
+                                                        .data(imageModel)
+                                                        .size(256, 256)
+                                                        .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                                                        .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                                                        .allowHardware(false)
+                                                        .build(),
+                                                    placeholder = painterResource(id = try { R.drawable.placeholder } catch (e: Exception) { android.R.drawable.ic_menu_gallery }),
+                                                    error = painterResource(id = try { R.drawable.error_image } catch (e: Exception) { android.R.drawable.ic_menu_report_image }),
+                                                    onLoading = { println("Loading image: ${page.content}, retryTrigger: $retryTrigger") },
+                                                    onSuccess = {
+                                                        println("Image loaded successfully: ${page.content}")
+                                                        isImageLoaded = true
+                                                    },
+                                                    onError = { error ->
+                                                        val errorMsg = if (error.result.throwable.message?.contains("BitmapFactory returned a null bitmap") == true) {
+                                                            "Failed to load image: ${page.content}. The URL may not point to a valid image. Please use a direct image URL ending with .jpg, .png, etc. (e.g., https://cdn.pixabay.com/photo/2023/01/01/image.jpg)"
+                                                        } else {
+                                                            "Failed to load image: ${page.content}. Reason: ${error.result.throwable.message}"
+                                                        }
+                                                        println(errorMsg)
+                                                        errorMessage = errorMsg
+                                                        isImageLoaded = false
                                                     }
-                                                    is AsyncImagePainter.State.Error -> {
-                                                        Column(
-                                                            modifier = Modifier
-                                                                .fillMaxSize()
-                                                                .align(Alignment.Center),
-                                                            horizontalAlignment = Alignment.CenterHorizontally
-                                                        ) {
-                                                            Image(
-                                                                painter = painterResource(id = try { R.drawable.error_image } catch (e: Exception) { android.R.drawable.ic_menu_report_image }),
-                                                                contentDescription = "Error image",
-                                                                modifier = Modifier.size(64.dp)
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(220.dp)
+                                                ) {
+                                                    Image(
+                                                        painter = painter,
+                                                        contentDescription = "Lesson image",
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .semantics {
+                                                                testTag = "image_page_${page.id}"
+                                                            }
+                                                    )
+                                                    when (painter.state) {
+                                                        is AsyncImagePainter.State.Loading -> {
+                                                            CircularProgressIndicator(
+                                                                modifier = Modifier
+                                                                    .align(Alignment.Center)
+                                                                    .size(32.dp)
                                                             )
-                                                            Spacer(modifier = Modifier.height(8.dp))
-                                                            Button(
-                                                                onClick = { retryTrigger++ }, // 触发重试
-                                                                modifier = Modifier.semantics {
-                                                                    testTag = "retry_button_${page.id}"
-                                                                    contentDescription = "Retry loading image"
-                                                                }
+                                                        }
+                                                        is AsyncImagePainter.State.Error -> {
+                                                            Column(
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .align(Alignment.Center),
+                                                                horizontalAlignment = Alignment.CenterHorizontally
                                                             ) {
-                                                                Text("Retry")
+                                                                Image(
+                                                                    painter = painterResource(id = try { R.drawable.error_image } catch (e: Exception) { android.R.drawable.ic_menu_report_image }),
+                                                                    contentDescription = "Error image",
+                                                                    modifier = Modifier.size(64.dp)
+                                                                )
+                                                                Spacer(modifier = Modifier.height(8.dp))
+                                                                Button(
+                                                                    onClick = { retryTrigger++ },
+                                                                    modifier = Modifier.semantics {
+                                                                        testTag = "retry_button_${page.id}"
+                                                                        contentDescription = "Retry loading image"
+                                                                    }
+                                                                ) {
+                                                                    Text("Retry")
+                                                                }
                                                             }
                                                         }
+                                                        is AsyncImagePainter.State.Success -> {
+                                                            LaunchedEffect(isImageLoaded) {
+                                                                if (isImageLoaded) {
+                                                                    println("Image displayed: ${page.content}")
+                                                                }
+                                                            }
+                                                        }
+                                                        else -> Unit
                                                     }
-                                                    else -> Unit
                                                 }
                                             }
                                         }
@@ -215,6 +322,7 @@ fun LessonDetailScreen(
                                                             context.startActivity(intent)
                                                         } catch (e: Exception) {
                                                             errorMessage = "Failed to open PDF: ${e.message}"
+                                                            println("Error opening PDF: ${e.message}")
                                                         }
                                                     }
                                                     .semantics {
@@ -237,6 +345,7 @@ fun LessonDetailScreen(
                                                             context.startActivity(intent)
                                                         } catch (e: Exception) {
                                                             errorMessage = "Failed to play audio: ${e.message}"
+                                                            println("Error playing audio: ${e.message}")
                                                         }
                                                     }
                                                     .semantics {
@@ -259,6 +368,7 @@ fun LessonDetailScreen(
                                                             context.startActivity(intent)
                                                         } catch (e: Exception) {
                                                             errorMessage = "Failed to play video: ${e.message}"
+                                                            println("Error playing video: ${e.message}")
                                                         }
                                                     }
                                                     .semantics {
@@ -304,9 +414,16 @@ fun LessonDetailScreen(
                                     println("Marked lesson as completed: $lessonId")
                                 } catch (e: Exception) {
                                     errorMessage = "Failed to mark lesson as completed: ${e.message}"
+                                    println("Error marking lesson as completed: ${e.message}")
                                 } finally {
+                                    try {
+                                        navController.popBackStack()
+                                        println("Navigation: Popped back stack")
+                                    } catch (e: Exception) {
+                                        errorMessage = "Failed to navigate back: ${e.message}"
+                                        println("Error navigating back: ${e.message}")
+                                    }
                                     isLoading = false
-                                    navController.popBackStack()
                                 }
                             }
                         },

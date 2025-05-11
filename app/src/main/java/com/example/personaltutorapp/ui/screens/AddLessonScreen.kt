@@ -39,13 +39,18 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
             "^(https?://.*)$",
             Pattern.CASE_INSENSITIVE
         )
+        // 图片 URL 验证（以常见图片扩展名结尾）
+        val imageUrlPattern = Pattern.compile(
+            "^(https?://.*\\.(?:jpg|jpeg|png|gif))$",
+            Pattern.CASE_INSENSITIVE
+        )
         // 文件扩展名验证（用于 PDF、音频、视频）
         val strictUrlPattern = Pattern.compile(
             "^(https?://.*\\.(?:pdf|mp3|mp4))$",
             Pattern.CASE_INSENSITIVE
         )
         return when (type) {
-            PageType.IMAGE -> basicUrlPattern.matcher(url).matches() // 放宽图片 URL 验证
+            PageType.IMAGE -> imageUrlPattern.matcher(url).matches()
             PageType.PDF -> strictUrlPattern.matcher(url).matches() && url.endsWith("pdf", true)
             PageType.AUDIO -> strictUrlPattern.matcher(url).matches() && url.endsWith("mp3", true)
             PageType.VIDEO -> strictUrlPattern.matcher(url).matches() && url.endsWith("mp4", true)
@@ -139,10 +144,10 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                             Text(
                                 when (pageType) {
                                     PageType.TEXT -> "Enter Text"
-                                    PageType.IMAGE -> "Enter Image URL"
-                                    PageType.PDF -> "Enter PDF URL"
-                                    PageType.AUDIO -> "Enter MP3 URL"
-                                    PageType.VIDEO -> "Enter MP4 URL"
+                                    PageType.IMAGE -> "Enter Image URL (e.g., https://example.com/image.jpg)"
+                                    PageType.PDF -> "Enter PDF URL (e.g., https://example.com/file.pdf)"
+                                    PageType.AUDIO -> "Enter MP3 URL (e.g., https://example.com/audio.mp3)"
+                                    PageType.VIDEO -> "Enter MP4 URL (e.g., https://example.com/video.mp4)"
                                 }
                             )
                         },
@@ -154,6 +159,19 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                             },
                         enabled = !isLoading
                     )
+
+                    // 仅在 PageType 为 IMAGE 时显示提示
+                    if (pageType == PageType.IMAGE) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Tip: Use a direct image URL ending with .jpg, .png, etc. Example: https://cdn.pixabay.com/photo/2023/01/01/image.jpg",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.semantics {
+                                testTag = "image_url_tip"
+                                contentDescription = "Image URL tip"
+                            }
+                        )
+                    }
                 }
             }
 
@@ -203,7 +221,7 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                     }
                     if (!isValidUrl(pageContent, pageType)) {
                         errorMessage = when (pageType) {
-                            PageType.IMAGE -> "Invalid URL format for ${pageType.name}. Please use a valid URL starting with http:// or https://"
+                            PageType.IMAGE -> "Invalid URL format for ${pageType.name}. Please use a direct image URL ending with jpg, png, or gif (e.g., https://example.com/image.jpg)"
                             PageType.PDF -> "Invalid URL format for ${pageType.name}. Please use a valid URL ending with pdf"
                             PageType.AUDIO -> "Invalid URL format for ${pageType.name}. Please use a valid URL ending with mp3"
                             PageType.VIDEO -> "Invalid URL format for ${pageType.name}. Please use a valid URL ending with mp4"
@@ -217,7 +235,7 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                         content = pageContent
                     )
                     pages.add(newPage)
-                    println("Added page: $newPage") // 调试日志
+                    println("Added page: $newPage")
                     pageContent = ""
                     errorMessage = null
                 },
@@ -250,8 +268,8 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                     coroutineScope.launch {
                         try {
                             viewModel.addLessonToCourse(courseId, title, pages)
-                            viewModel.refreshAllCourses() // 确保数据刷新
-                            println("Lesson saved: $title with ${pages.size} pages") // 调试日志
+                            viewModel.refreshAllCourses()
+                            println("Lesson saved: $title with ${pages.size} pages")
                             isLoading = false
                             navController.popBackStack()
                         } catch (e: Exception) {
