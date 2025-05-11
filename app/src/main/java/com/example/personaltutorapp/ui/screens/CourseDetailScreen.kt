@@ -15,6 +15,7 @@ import androidx.navigation.NavController
 import com.example.personaltutorapp.model.User
 import com.example.personaltutorapp.navigation.NavRoutes
 import com.example.personaltutorapp.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun CourseDetailScreen(
@@ -27,13 +28,20 @@ fun CourseDetailScreen(
     val course by remember(allCourses, courseId) {
         derivedStateOf { allCourses.find { it.id == courseId } }
     }
-    val pendingUsers by produceState(initialValue = emptyList<User>(), courseId) {
+    val pendingUsers by produceState(initialValue = emptyList<User>(), courseId, allCourses) {
         value = viewModel.getPendingRequests(courseId)
     }
     var isLoading by remember { mutableStateOf(true) }
+    val loadingUsers = remember { mutableStateMapOf<String, Boolean>() }
+    val coroutineScope = rememberCoroutineScope()
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(course) {
+        isLoading = false
+    }
 
     LaunchedEffect(pendingUsers) {
-        isLoading = false
+        println("Pending users updated: $pendingUsers")
     }
 
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -185,23 +193,51 @@ fun CourseDetailScreen(
                                         )
                                         Row {
                                             TextButton(
-                                                onClick = { viewModel.acceptEnrollment(courseId, user.id) },
+                                                onClick = {
+                                                    loadingUsers[user.id] = true
+                                                    coroutineScope.launch {
+                                                        viewModel.acceptEnrollment(courseId, user.id)
+                                                        loadingUsers[user.id] = false
+                                                        snackbarMessage = "Request from ${user.displayName} accepted"
+                                                    }
+                                                },
                                                 modifier = Modifier.semantics {
                                                     testTag = "accept_button_${user.id}"
                                                     contentDescription = "Accept request for ${user.displayName}"
-                                                }
+                                                },
+                                                enabled = loadingUsers[user.id] != true
                                             ) {
-                                                Text("Accept")
+                                                if (loadingUsers[user.id] == true) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                } else {
+                                                    Text("Accept")
+                                                }
                                             }
                                             Spacer(modifier = Modifier.width(8.dp))
                                             TextButton(
-                                                onClick = { viewModel.rejectEnrollment(courseId, user.id) },
+                                                onClick = {
+                                                    loadingUsers[user.id] = true
+                                                    coroutineScope.launch {
+                                                        viewModel.rejectEnrollment(courseId, user.id)
+                                                        loadingUsers[user.id] = false
+                                                        snackbarMessage = "Request from ${user.displayName} rejected"
+                                                    }
+                                                },
                                                 modifier = Modifier.semantics {
                                                     testTag = "reject_button_${user.id}"
                                                     contentDescription = "Reject request for ${user.displayName}"
-                                                }
+                                                },
+                                                enabled = loadingUsers[user.id] != true
                                             ) {
-                                                Text("Reject")
+                                                if (loadingUsers[user.id] == true) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                } else {
+                                                    Text("Reject")
+                                                }
                                             }
                                         }
                                     }
@@ -311,6 +347,25 @@ fun CourseDetailScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+
+                    snackbarMessage?.let { message ->
+                        LaunchedEffect(message) {
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(3000)
+                                snackbarMessage = null
+                            }
+                        }
+                        Snackbar(
+                            modifier = Modifier.padding(16.dp),
+                            action = {
+                                TextButton(onClick = { snackbarMessage = null }) {
+                                    Text("Dismiss")
+                                }
+                            }
+                        ) {
+                            Text(message)
                         }
                     }
                 }

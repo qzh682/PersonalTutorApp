@@ -17,6 +17,7 @@ import com.example.personaltutorapp.model.PageType
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 import java.util.*
+import java.util.regex.Pattern
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +31,27 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
     var isLoading by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
+
+    // URL 验证函数
+    fun isValidUrl(url: String, type: PageType): Boolean {
+        // 基本 URL 格式验证（以 http:// 或 https:// 开头）
+        val basicUrlPattern = Pattern.compile(
+            "^(https?://.*)$",
+            Pattern.CASE_INSENSITIVE
+        )
+        // 文件扩展名验证（用于 PDF、音频、视频）
+        val strictUrlPattern = Pattern.compile(
+            "^(https?://.*\\.(?:pdf|mp3|mp4))$",
+            Pattern.CASE_INSENSITIVE
+        )
+        return when (type) {
+            PageType.IMAGE -> basicUrlPattern.matcher(url).matches() // 放宽图片 URL 验证
+            PageType.PDF -> strictUrlPattern.matcher(url).matches() && url.endsWith("pdf", true)
+            PageType.AUDIO -> strictUrlPattern.matcher(url).matches() && url.endsWith("mp3", true)
+            PageType.VIDEO -> strictUrlPattern.matcher(url).matches() && url.endsWith("mp4", true)
+            else -> true // TEXT 类型不需要 URL 验证
+        }
+    }
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -63,7 +85,8 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                             .semantics {
                                 testTag = "title_field"
                                 contentDescription = "Lesson title input"
-                            }
+                            },
+                        enabled = !isLoading
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -85,7 +108,8 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                                 .semantics {
                                     testTag = "page_type_dropdown"
                                     contentDescription = "Page type selection"
-                                }
+                                },
+                            enabled = !isLoading
                         )
                         ExposedDropdownMenu(
                             expanded = expanded,
@@ -127,8 +151,38 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                             .semantics {
                                 testTag = "content_field"
                                 contentDescription = "Page content input"
-                            }
+                            },
+                        enabled = !isLoading
                     )
+                }
+            }
+
+            // 显示已添加的页面预览
+            if (pages.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Pages Added: ${pages.size}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.semantics {
+                                testTag = "pages_count"
+                                contentDescription = "Pages added: ${pages.size}"
+                            }
+                        )
+                        pages.forEachIndexed { index, page ->
+                            Text(
+                                text = "Page ${index + 1}: ${page.type.name} - ${page.content.take(30)}${if (page.content.length > 30) "..." else ""}",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.semantics {
+                                    testTag = "page_preview_$index"
+                                    contentDescription = "Page ${index + 1} preview"
+                                }
+                            )
+                        }
+                    }
                 }
             }
 
@@ -147,13 +201,23 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                         errorMessage = "Please enter page content"
                         return@Button
                     }
-                    pages.add(
-                        LessonPage(
-                            id = UUID.randomUUID().toString(),
-                            type = pageType,
-                            content = pageContent
-                        )
+                    if (!isValidUrl(pageContent, pageType)) {
+                        errorMessage = when (pageType) {
+                            PageType.IMAGE -> "Invalid URL format for ${pageType.name}. Please use a valid URL starting with http:// or https://"
+                            PageType.PDF -> "Invalid URL format for ${pageType.name}. Please use a valid URL ending with pdf"
+                            PageType.AUDIO -> "Invalid URL format for ${pageType.name}. Please use a valid URL ending with mp3"
+                            PageType.VIDEO -> "Invalid URL format for ${pageType.name}. Please use a valid URL ending with mp4"
+                            else -> "Invalid URL format"
+                        }
+                        return@Button
+                    }
+                    val newPage = LessonPage(
+                        id = UUID.randomUUID().toString(),
+                        type = pageType,
+                        content = pageContent
                     )
+                    pages.add(newPage)
+                    println("Added page: $newPage") // 调试日志
                     pageContent = ""
                     errorMessage = null
                 },
@@ -164,20 +228,10 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                         testTag = "add_page_button"
                         contentDescription = "Add page to lesson"
                     },
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.medium,
+                enabled = !isLoading
             ) {
                 Text("Add Page to Lesson")
-            }
-
-            if (pages.isNotEmpty()) {
-                Text(
-                    text = "Pages Added: ${pages.size}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.semantics {
-                        testTag = "pages_count"
-                        contentDescription = "Pages added: ${pages.size}"
-                    }
-                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -194,10 +248,16 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                     }
                     isLoading = true
                     coroutineScope.launch {
-                        viewModel.addLessonToCourse(courseId, title, pages)
-                        viewModel.refreshAllCourses()
-                        isLoading = false
-                        navController.popBackStack()
+                        try {
+                            viewModel.addLessonToCourse(courseId, title, pages)
+                            viewModel.refreshAllCourses() // 确保数据刷新
+                            println("Lesson saved: $title with ${pages.size} pages") // 调试日志
+                            isLoading = false
+                            navController.popBackStack()
+                        } catch (e: Exception) {
+                            errorMessage = "Failed to save lesson: ${e.message}"
+                            isLoading = false
+                        }
                     }
                 },
                 modifier = Modifier

@@ -31,14 +31,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
+            insertTestUsers()
             refreshAllCourses()
         }
     }
 
     suspend fun refreshAllCourses() {
-        val entities = courseDao.getAllCourses()
-        _allCourses.value = entities.map {
-            it.toCourseWithLessons(userDao, db.lessonDao(), db.lessonPageDao(), db.quizDao(), db.quizQuestionDao(), db.quizSubmissionDao())
+        try {
+            val entities = courseDao.getAllCourses()
+            val courses = entities.map {
+                it.toCourseWithLessons(userDao, db.lessonDao(), db.lessonPageDao(), db.quizDao(), db.quizQuestionDao(), db.quizSubmissionDao())
+            }
+            _allCourses.value = courses
+            println("All courses refreshed successfully: ${courses.map { "${it.id} (Lessons: ${it.lessons.size})" }}")
+        } catch (e: Exception) {
+            println("Failed to refresh all courses: ${e.message}")
+        }
+    }
+
+    fun insertTestUsers() = viewModelScope.launch {
+        val testUsers = listOf(
+            User(
+                id = UUID.randomUUID().toString(),
+                email = "test1@example.com",
+                password = "test123",
+                displayName = "Test Student 1",
+                role = "Student",
+                bio = "",
+                profileImageUrl = ""
+            ),
+            User(
+                id = UUID.randomUUID().toString(),
+                email = "test2@temp-mail.org",
+                password = "test123",
+                displayName = "Test Student 2",
+                role = "Student",
+                bio = "",
+                profileImageUrl = ""
+            )
+        )
+        testUsers.forEach { user ->
+            userDao.insertUser(user.toEntity())
+            println("Inserted test user: ${user.email}")
+        }
+    }
+
+    fun enrollTestUser(courseId: String, email: String) = viewModelScope.launch {
+        val user = userDao.getUserByEmail(email)?.toUser() ?: run {
+            println("User $email not found")
+            return@launch
+        }
+        val course = getCourseById(courseId) ?: run {
+            println("Course $courseId not found")
+            return@launch
+        }
+        if (!course.pendingUserIds.contains(user.id) && !course.enrolledUserIds.contains(user.id)) {
+            val updatedCourse = course.copy(pendingUserIds = (course.pendingUserIds + user.id).toMutableList())
+            courseDao.updateCourse(updatedCourse.toEntity())
+            refreshAllCourses()
+            acceptEnrollment(courseId, user.id)
+            println("Enrolled test user ${user.email} to course $courseId")
         }
     }
 
@@ -52,8 +104,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         onResult: (Boolean) -> Unit
     ) {
         viewModelScope.launch {
+            if (!isValidEmail(email)) {
+                println("Invalid email format: $email")
+                onResult(false)
+                return@launch
+            }
             val existing = userDao.getUserByEmail(email)
             if (existing != null) {
+                println("Email $email already exists")
                 onResult(false)
                 return@launch
             }
@@ -69,8 +127,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
             userDao.insertUser(newUser.toEntity())
             _currentUser.value = newUser
+            println("Registered user: ${newUser.email}")
             onResult(true)
         }
+    }
+
+    private fun isValidEmail(email: String): Boolean {
+        return android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
     }
 
     fun login(email: String, password: String, onResult: (Boolean) -> Unit) {
@@ -78,8 +141,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val userEntity = userDao.getUserByEmail(email)
             if (userEntity != null && userEntity.password == password) {
                 _currentUser.value = userEntity.toUser()
+                println("Logged in user: $email")
                 onResult(true)
             } else {
+                println("Login failed for $email")
                 onResult(false)
             }
         }
@@ -87,6 +152,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         _currentUser.value = null
+        println("Logged out")
     }
 
     fun createCourse(title: String, description: String, subject: String) = viewModelScope.launch {
@@ -102,6 +168,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
         courseDao.insertCourse(course.toEntity())
         refreshAllCourses()
+        println("Created course: ${course.title}")
     }
 
     fun getCoursesForCurrentUser(): List<Course> {
@@ -114,68 +181,91 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addLessonToCourse(courseId: String, title: String, pages: List<LessonPage>) = viewModelScope.launch {
-        val course = getCourseById(courseId) ?: return@launch
-
-        val lessonId = UUID.randomUUID().toString()
-        val newLesson = LessonEntity(
-            id = lessonId,
-            courseId = courseId,
-            title = title,
-            pages = emptyList(),
-            completedByUserIds = emptyList()
-        )
-        db.lessonDao().insertLesson(newLesson)
-
-        pages.forEach { page ->
-            val pageEntity = LessonPageEntity(
-                id = page.id,
-                lessonId = lessonId,
-                type = page.type,
-                content = page.content
-            )
-            lessonPageDao.insertPage(pageEntity)
+        val course = getCourseById(courseId) ?: run {
+            println("Course $courseId not found")
+            return@launch
         }
+        println("Adding lesson to course: ${course.title}, enrolledUserIds: ${course.enrolledUserIds}")
 
-        refreshAllCourses()
+        try {
+            val lessonId = UUID.randomUUID().toString()
+            val newLesson = LessonEntity(
+                id = lessonId,
+                courseId = courseId,
+                title = title,
+                pages = emptyList(),
+                completedByUserIds = emptyList()
+            )
+            db.lessonDao().insertLesson(newLesson)
+            println("Inserted lesson: $title (ID: $lessonId)")
 
-        course.enrolledUserIds.forEach { userId ->
-            val user = userDao.getUserById(userId)?.toUser()
-            user?.let {
-                sendEmail(it.email, "New Lesson: $title", "A new lesson has been added to your enrolled course: ${course.title}.")
+            pages.forEachIndexed { index, page ->
+                val pageEntity = LessonPageEntity(
+                    id = page.id,
+                    lessonId = lessonId,
+                    type = page.type,
+                    content = page.content
+                )
+                lessonPageDao.insertPage(pageEntity)
+                println("Inserted page ${index + 1}/${pages.size}: Type=${page.type}, Content=${page.content}")
             }
+
+            refreshAllCourses()
+            println("Lesson $title added to course ${course.title}")
+
+            if (course.enrolledUserIds.isEmpty()) {
+                println("No enrolled users for course ${course.title}")
+            } else {
+                course.enrolledUserIds.forEach { userId ->
+                    val user = userDao.getUserById(userId)?.toUser()
+                    println("Checking user for ID $userId: $user")
+                    user?.let {
+                        println("Sending email to ${it.email} for new lesson: $title")
+                        sendEmail(it.email, "New Lesson: $title", "A new lesson has been added to your enrolled course: ${course.title}.")
+                    } ?: println("User $userId not found")
+                }
+            }
+        } catch (e: Exception) {
+            println("Failed to add lesson to course $courseId: ${e.message}")
         }
     }
 
     private fun sendEmail(to: String, subject: String, body: String) {
-        val intent = Intent(Intent.ACTION_SENDTO).apply {
-            data = Uri.parse("mailto:")
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "message/rfc822"
             putExtra(Intent.EXTRA_EMAIL, arrayOf(to))
             putExtra(Intent.EXTRA_SUBJECT, subject)
             putExtra(Intent.EXTRA_TEXT, body)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        if (intent.resolveActivity(appContext.packageManager) != null) {
-            appContext.startActivity(intent)
+        try {
+            val chooser = Intent.createChooser(intent, "Send Email")
+            if (intent.resolveActivity(appContext.packageManager) != null) {
+                appContext.startActivity(chooser)
+                println("✅ Starting email client for $to with chooser")
+            } else {
+                println("❌ No email client found for ACTION_SEND")
+            }
+        } catch (e: Exception) {
+            println("❌ Failed to start email client for $to: ${e.message}")
         }
     }
 
     suspend fun markLessonCompleted(courseId: String, lessonId: String) {
         val userId = _currentUser.value?.id ?: return
-        val course = getCourseById(courseId) ?: return
+        val lessonEntity = db.lessonDao().getLessonById(lessonId) ?: return
 
-        val updatedLessons = course.lessons.map {
-            if (it.id == lessonId && !it.completedByUserIds.contains(userId)) {
-                val updated = it.copy(completedByUserIds = (it.completedByUserIds + userId).toMutableList())
-                println("✅ Marked completed: ${updated.title}, by $userId")
-                updated
-            } else it
+        println("Before update: Lesson $lessonId, completedByUserIds: ${lessonEntity.completedByUserIds}")
+        if (!lessonEntity.completedByUserIds.contains(userId)) {
+            val updatedCompletedByUserIds = lessonEntity.completedByUserIds.toMutableList().apply {
+                add(userId)
+            }
+            val updatedLesson = lessonEntity.copy(completedByUserIds = updatedCompletedByUserIds)
+            db.lessonDao().updateLesson(updatedLesson)
+            val updated = db.lessonDao().getLessonById(lessonId)
+            println("After update: Lesson $lessonId, completedByUserIds: ${updated?.completedByUserIds}")
+            refreshAllCourses()
         }
-
-        val updatedCourse = course.copy(lessons = updatedLessons.toMutableList())
-        courseDao.updateCourse(updatedCourse.toEntity())
-
-        println("🧩 Persisted updated course: ${updatedCourse.id}")
-        refreshAllCourses()
     }
 
     fun enrollInCourse(courseId: String) = viewModelScope.launch {
@@ -207,20 +297,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun acceptEnrollment(courseId: String, userId: String) = viewModelScope.launch {
-        val course = getCourseById(courseId) ?: return@launch
+        println("Accepting enrollment for course $courseId, user $userId")
+        val course = getCourseById(courseId) ?: run {
+            println("Course $courseId not found")
+            return@launch
+        }
         val updatedCourse = course.copy(
             pendingUserIds = (course.pendingUserIds - userId).toMutableList(),
             enrolledUserIds = (course.enrolledUserIds + userId).toMutableList()
         )
+        println("Updating course: pendingUserIds=${updatedCourse.pendingUserIds}, enrolledUserIds=${updatedCourse.enrolledUserIds}")
         courseDao.updateCourse(updatedCourse.toEntity())
         refreshAllCourses()
+        println("Course $courseId updated and refreshed")
     }
 
     fun rejectEnrollment(courseId: String, userId: String) = viewModelScope.launch {
-        val course = getCourseById(courseId) ?: return@launch
+        println("Rejecting enrollment for course $courseId, user $userId")
+        val course = getCourseById(courseId) ?: run {
+            println("Course $courseId not found")
+            return@launch
+        }
         val updatedCourse = course.copy(pendingUserIds = (course.pendingUserIds - userId).toMutableList())
+        println("Updating course: pendingUserIds=${updatedCourse.pendingUserIds}")
         courseDao.updateCourse(updatedCourse.toEntity())
         refreshAllCourses()
+        println("Course $courseId updated and refreshed")
     }
 
     suspend fun getUserById(userId: String): User? {
@@ -306,5 +408,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         db.quizQuestionDao().insertAll(questionEntities)
 
         refreshAllCourses()
+    }
+
+    suspend fun debugCourse(courseId: String) {
+        val course = db.courseDao().getCourseById(courseId)
+        println("Course: $course")
+    }
+
+    suspend fun debugUser(userId: String) {
+        val user = db.userDao().getUserById(userId)
+        println("User: $user")
+    }
+
+    suspend fun deleteTestUser(email: String) {
+        val user = db.userDao().getUserByEmail(email)
+        user?.let { userDao.deleteUser(it) }
+        println("Deleted test user: $email")
     }
 }

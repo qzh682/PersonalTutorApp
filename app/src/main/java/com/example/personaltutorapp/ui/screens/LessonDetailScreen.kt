@@ -16,10 +16,13 @@ import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import com.example.personaltutorapp.model.PageType
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
+import com.example.personaltutorapp.R
+import androidx.compose.ui.res.painterResource
 
 @Composable
 fun LessonDetailScreen(
@@ -41,7 +44,14 @@ fun LessonDetailScreen(
         }
     }
 
+    // 强制刷新数据
+    LaunchedEffect(Unit) {
+        viewModel.refreshAllCourses()
+    }
+
+    // 调试 lesson 数据
     LaunchedEffect(lesson) {
+        println("Lesson pages: ${lesson?.pages}")
         isLoading = false
     }
 
@@ -126,16 +136,72 @@ fun LessonDetailScreen(
                                             )
                                         }
                                         PageType.IMAGE -> {
-                                            Image(
-                                                painter = rememberAsyncImagePainter(page.content),
-                                                contentDescription = "Lesson image",
+                                            var retryTrigger by remember { mutableStateOf(0) } // 用于触发重试
+                                            // 使用 retryTrigger 修改 model，触发重新加载
+                                            val imageModel by remember(retryTrigger) {
+                                                mutableStateOf(page.content + "?retry=$retryTrigger")
+                                            }
+                                            val painter = rememberAsyncImagePainter(
+                                                model = imageModel,
+                                                placeholder = painterResource(id = try { R.drawable.placeholder } catch (e: Exception) { android.R.drawable.ic_menu_gallery }),
+                                                error = painterResource(id = try { R.drawable.error_image } catch (e: Exception) { android.R.drawable.ic_menu_report_image }),
+                                                onLoading = { println("Loading image: ${page.content}, retryTrigger: $retryTrigger") },
+                                                onSuccess = { println("Image loaded successfully: ${page.content}") },
+                                                onError = { error ->
+                                                    val errorMsg = "Failed to load image: ${page.content}. Reason: ${error.result.throwable.message}"
+                                                    println(errorMsg)
+                                                    errorMessage = errorMsg
+                                                }
+                                            )
+                                            Box(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .height(220.dp)
-                                                    .semantics {
-                                                        testTag = "image_page_${page.id}"
+                                            ) {
+                                                Image(
+                                                    painter = painter,
+                                                    contentDescription = "Lesson image",
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .semantics {
+                                                            testTag = "image_page_${page.id}"
+                                                        }
+                                                )
+                                                when (painter.state) {
+                                                    is AsyncImagePainter.State.Loading -> {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier
+                                                                .align(Alignment.Center)
+                                                                .size(32.dp)
+                                                        )
                                                     }
-                                            )
+                                                    is AsyncImagePainter.State.Error -> {
+                                                        Column(
+                                                            modifier = Modifier
+                                                                .fillMaxSize()
+                                                                .align(Alignment.Center),
+                                                            horizontalAlignment = Alignment.CenterHorizontally
+                                                        ) {
+                                                            Image(
+                                                                painter = painterResource(id = try { R.drawable.error_image } catch (e: Exception) { android.R.drawable.ic_menu_report_image }),
+                                                                contentDescription = "Error image",
+                                                                modifier = Modifier.size(64.dp)
+                                                            )
+                                                            Spacer(modifier = Modifier.height(8.dp))
+                                                            Button(
+                                                                onClick = { retryTrigger++ }, // 触发重试
+                                                                modifier = Modifier.semantics {
+                                                                    testTag = "retry_button_${page.id}"
+                                                                    contentDescription = "Retry loading image"
+                                                                }
+                                                            ) {
+                                                                Text("Retry")
+                                                            }
+                                                        }
+                                                    }
+                                                    else -> Unit
+                                                }
+                                            }
                                         }
                                         PageType.PDF -> {
                                             Text(
@@ -145,7 +211,11 @@ fun LessonDetailScreen(
                                                 modifier = Modifier
                                                     .clickable {
                                                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(page.content))
-                                                        context.startActivity(intent)
+                                                        try {
+                                                            context.startActivity(intent)
+                                                        } catch (e: Exception) {
+                                                            errorMessage = "Failed to open PDF: ${e.message}"
+                                                        }
                                                     }
                                                     .semantics {
                                                         testTag = "pdf_page_${page.id}"
@@ -163,7 +233,11 @@ fun LessonDetailScreen(
                                                         val intent = Intent(Intent.ACTION_VIEW).apply {
                                                             setDataAndType(Uri.parse(page.content), "audio/*")
                                                         }
-                                                        context.startActivity(intent)
+                                                        try {
+                                                            context.startActivity(intent)
+                                                        } catch (e: Exception) {
+                                                            errorMessage = "Failed to play audio: ${e.message}"
+                                                        }
                                                     }
                                                     .semantics {
                                                         testTag = "audio_page_${page.id}"
@@ -181,12 +255,26 @@ fun LessonDetailScreen(
                                                         val intent = Intent(Intent.ACTION_VIEW).apply {
                                                             setDataAndType(Uri.parse(page.content), "video/*")
                                                         }
-                                                        context.startActivity(intent)
+                                                        try {
+                                                            context.startActivity(intent)
+                                                        } catch (e: Exception) {
+                                                            errorMessage = "Failed to play video: ${e.message}"
+                                                        }
                                                     }
                                                     .semantics {
                                                         testTag = "video_page_${page.id}"
                                                         contentDescription = "Play video file"
                                                     }
+                                            )
+                                        }
+                                        else -> {
+                                            Text(
+                                                text = "Unsupported page type: ${page.type}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.semantics {
+                                                    testTag = "unsupported_page_${page.id}"
+                                                    contentDescription = "Unsupported page type"
+                                                }
                                             )
                                         }
                                     }
@@ -210,10 +298,16 @@ fun LessonDetailScreen(
                         onClick = {
                             coroutineScope.launch {
                                 isLoading = true
-                                viewModel.markLessonCompleted(courseId, lessonId)
-                                viewModel.refreshAllCourses()
-                                isLoading = false
-                                navController.popBackStack()
+                                try {
+                                    viewModel.markLessonCompleted(courseId, lessonId)
+                                    viewModel.refreshAllCourses()
+                                    println("Marked lesson as completed: $lessonId")
+                                } catch (e: Exception) {
+                                    errorMessage = "Failed to mark lesson as completed: ${e.message}"
+                                } finally {
+                                    isLoading = false
+                                    navController.popBackStack()
+                                }
                             }
                         },
                         modifier = Modifier
