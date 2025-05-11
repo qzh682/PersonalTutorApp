@@ -6,10 +6,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.personaltutorapp.viewmodel.MainViewModel
 import com.example.personaltutorapp.navigation.NavRoutes
+import com.example.personaltutorapp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -20,120 +24,309 @@ fun QuizScreen(
 ) {
     val course = viewModel.getCourseById(courseId)
     val quiz = course?.quiz
-    val currentUser = viewModel.currentUser.collectAsState().value
+    val currentUser by viewModel.currentUser.collectAsState()
     val scope = rememberCoroutineScope()
-
-    if (quiz == null || currentUser == null) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Text("No quiz available for this course.", style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-        return
-    }
-
-    val submission = quiz.submissions.find { it.userId == currentUser.id }
-    var showQuiz by remember { mutableStateOf(submission == null) }
-    var currentIndex by remember { mutableStateOf(0) }
-    val selectedAnswers = remember { mutableStateListOf<Int?>() }
-    var score by remember { mutableStateOf(0) }
-    var completed by remember { mutableStateOf(false) }
-
-    LaunchedEffect(showQuiz) {
-        if (showQuiz) {
-            selectedAnswers.clear()
-            quiz.questions.forEach { _ -> selectedAnswers.add(null) }
-            currentIndex = 0
-            completed = false
-            score = 0
-        }
-    }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     Surface(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            if (!showQuiz && submission != null) {
-                Text("You’ve already completed this quiz.", style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Score: ${submission.score} / ${quiz.questions.size}", style = MaterialTheme.typography.bodyLarge)
+        if (quiz == null || currentUser == null) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No quiz available for this course",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.semantics {
+                        testTag = "no_quiz_text"
+                        contentDescription = "No quiz available"
+                    }
+                )
+            }
+        } else {
+            currentUser?.let { user ->
+                val submission = quiz.submissions.find { it.userId == user.id }
+                var showQuiz by remember { mutableStateOf(submission == null) }
+                var currentIndex by remember { mutableStateOf(0) }
+                val selectedAnswers = remember { mutableStateListOf<Int?>() }
+                var score by remember { mutableStateOf(0) }
+                var completed by remember { mutableStateOf(false) }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = { showQuiz = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Retake Quiz")
+                LaunchedEffect(showQuiz) {
+                    if (showQuiz) {
+                        selectedAnswers.clear()
+                        quiz.questions.forEach { _ -> selectedAnswers.add(null) }
+                        currentIndex = 0
+                        completed = false
+                        score = 0
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = { navController.popBackStack() },
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("Back to Course")
-                }
-            } else if (!completed) {
-                val question = quiz.questions.getOrNull(currentIndex)
-                if (question != null) {
-                    Text("Question ${currentIndex + 1} / ${quiz.questions.size}", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(question.question, style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    question.options.forEachIndexed { index, option ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                    if (!showQuiz && submission != null) {
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedAnswers[currentIndex] = index }
-                                .padding(vertical = 4.dp)
+                                .semantics {
+                                    testTag = "submission_card"
+                                    contentDescription = "Quiz submission details"
+                                },
+                            shape = MaterialTheme.shapes.medium
                         ) {
-                            RadioButton(
-                                selected = selectedAnswers[currentIndex] == index,
-                                onClick = { selectedAnswers[currentIndex] = index }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(option)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        if (currentIndex > 0) {
-                            Button(onClick = { currentIndex-- }) {
-                                Text("Previous")
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "You've already completed this quiz",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.semantics {
+                                        testTag = "submission_status"
+                                        contentDescription = "Quiz already completed"
+                                    }
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Score: ${submission.score} / ${quiz.questions.size}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.semantics {
+                                        testTag = "submission_score"
+                                        contentDescription = "Score: ${submission.score} out of ${quiz.questions.size}"
+                                    }
+                                )
                             }
                         }
+
                         Button(
-                            onClick = {
-                                if (currentIndex < quiz.questions.size - 1) {
-                                    currentIndex++
-                                } else {
-                                    score = quiz.questions.mapIndexed { i, q ->
-                                        if (selectedAnswers[i] == q.correctAnswerIndex) 1 else 0
-                                    }.sum()
-
-                                    scope.launch {
-                                        viewModel.submitQuizResult(courseId, currentUser.id, score)
-                                    }
-
-                                    completed = true
-                                }
-                            },
-                            enabled = selectedAnswers[currentIndex] != null
+                            onClick = { showQuiz = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .semantics {
+                                    testTag = "retake_quiz_button"
+                                    contentDescription = "Retake quiz"
+                                },
+                            shape = MaterialTheme.shapes.medium
                         ) {
-                            Text(if (currentIndex < quiz.questions.size - 1) "Next" else "Submit")
+                            Text("Retake Quiz")
+                        }
+
+                        Button(
+                            onClick = { navController.popBackStack() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .semantics {
+                                    testTag = "back_to_course_button"
+                                    contentDescription = "Back to course"
+                                },
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Text("Back to Course")
+                        }
+                    } else if (!completed) {
+                        val question = quiz.questions.getOrNull(currentIndex)
+                        if (question != null) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics {
+                                        testTag = "question_card_${currentIndex}"
+                                        contentDescription = "Question ${currentIndex + 1}"
+                                    },
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = "Question ${currentIndex + 1} / ${quiz.questions.size}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.semantics {
+                                            testTag = "question_number_${currentIndex}"
+                                            contentDescription = "Question ${currentIndex + 1} of ${quiz.questions.size}"
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = question.question,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.semantics {
+                                            testTag = "question_text_${currentIndex}"
+                                            contentDescription = "Question: ${question.question}"
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    question.options.forEachIndexed { index, option ->
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp)
+                                                .clickable { selectedAnswers[currentIndex] = index }
+                                                .semantics {
+                                                    testTag = "option_${index}_${currentIndex}"
+                                                    contentDescription = "Option: $option"
+                                                },
+                                            shape = MaterialTheme.shapes.small,
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (selectedAnswers[currentIndex] == index)
+                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                                else MaterialTheme.colorScheme.surface
+                                            )
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(12.dp)
+                                            ) {
+                                                RadioButton(
+                                                    selected = selectedAnswers[currentIndex] == index,
+                                                    onClick = { selectedAnswers[currentIndex] = index },
+                                                    modifier = Modifier.semantics {
+                                                        testTag = "radio_${index}_${currentIndex}"
+                                                        contentDescription = "Select option $option"
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = option,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    modifier = Modifier.semantics {
+                                                        testTag = "option_text_${index}_${currentIndex}"
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            errorMessage?.let {
+                                Snackbar(
+                                    modifier = Modifier.padding(top = 8.dp),
+                                    action = {
+                                        TextButton(onClick = { errorMessage = null }) { Text("Dismiss") }
+                                    }
+                                ) { Text(it) }
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                if (currentIndex > 0) {
+                                    OutlinedButton(
+                                        onClick = { currentIndex-- },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                            .semantics {
+                                                testTag = "previous_button_${currentIndex}"
+                                                contentDescription = "Previous question"
+                                            },
+                                        shape = MaterialTheme.shapes.medium
+                                    ) {
+                                        Text("Previous")
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = {
+                                        if (selectedAnswers[currentIndex] == null) {
+                                            errorMessage = "Please select an answer"
+                                            return@Button
+                                        }
+                                        if (currentIndex < quiz.questions.size - 1) {
+                                            currentIndex++
+                                            errorMessage = null
+                                        } else {
+                                            isLoading = true
+                                            score = quiz.questions.mapIndexed { i, q ->
+                                                if (selectedAnswers[i] == q.correctAnswerIndex) 1 else 0
+                                            }.sum()
+
+                                            scope.launch {
+                                                viewModel.submitQuizResult(courseId, user.id, score)
+                                                isLoading = false
+                                                completed = true
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp)
+                                        .semantics {
+                                            testTag = if (currentIndex < quiz.questions.size - 1) "next_button_${currentIndex}" else "submit_button"
+                                            contentDescription = if (currentIndex < quiz.questions.size - 1) "Next question" else "Submit quiz"
+                                        },
+                                    shape = MaterialTheme.shapes.medium,
+                                    enabled = !isLoading
+                                ) {
+                                    if (isLoading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    } else {
+                                        Text(if (currentIndex < quiz.questions.size - 1) "Next" else "Submit")
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .semantics {
+                                    testTag = "quiz_result_card"
+                                    contentDescription = "Quiz result"
+                                },
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Quiz Completed!",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.semantics {
+                                        testTag = "quiz_completed_text"
+                                        contentDescription = "Quiz completed"
+                                    }
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "You scored $score out of ${quiz.questions.size}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.semantics {
+                                        testTag = "quiz_score"
+                                        contentDescription = "Score: $score out of ${quiz.questions.size}"
+                                    }
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = { navController.popBackStack() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .semantics {
+                                    testTag = "back_to_course_button_completed"
+                                    contentDescription = "Back to course"
+                                },
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Text("Back to Course")
                         }
                     }
-                }
-            } else {
-                Text("Quiz Completed!", style = MaterialTheme.typography.headlineSmall)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("You scored $score out of ${quiz.questions.size}", style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(24.dp))
-                Button(onClick = { navController.popBackStack() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Back to Course")
                 }
             }
         }

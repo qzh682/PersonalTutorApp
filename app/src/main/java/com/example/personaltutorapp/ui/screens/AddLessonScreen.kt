@@ -6,13 +6,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.personaltutorapp.model.LessonPage
 import com.example.personaltutorapp.model.PageType
 import com.example.personaltutorapp.viewmodel.MainViewModel
-import java.util.*
 import kotlinx.coroutines.launch
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -22,111 +26,198 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
     var pageContent by remember { mutableStateOf("") }
     val pages = remember { mutableStateListOf<LessonPage>() }
     var expanded by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
-                .padding(24.dp)
+                .padding(16.dp)
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Add Lesson", style = MaterialTheme.typography.headlineMedium)
-
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text("Lesson Title") },
-                modifier = Modifier.fillMaxWidth()
+            Text(
+                text = "Add Lesson",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics {
+                    testTag = "add_lesson_title"
+                    contentDescription = "Add lesson title"
+                }
             )
 
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = !expanded }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium
             ) {
-                OutlinedTextField(
-                    value = pageType.name,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Page Type") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor()
-                        .clickable { expanded = true }
-                )
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
-                    PageType.values().forEach {
-                        DropdownMenuItem(
-                            text = { Text(it.name) },
-                            onClick = {
-                                pageType = it
-                                expanded = false
+                Column(modifier = Modifier.padding(16.dp)) {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("Lesson Title") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics {
+                                testTag = "title_field"
+                                contentDescription = "Lesson title input"
                             }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded }
+                    ) {
+                        OutlinedTextField(
+                            value = pageType.name,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Page Type") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor()
+                                .clickable { expanded = true }
+                                .semantics {
+                                    testTag = "page_type_dropdown"
+                                    contentDescription = "Page type selection"
+                                }
                         )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            PageType.values().forEach {
+                                DropdownMenuItem(
+                                    text = { Text(it.name) },
+                                    onClick = {
+                                        pageType = it
+                                        expanded = false
+                                    },
+                                    modifier = Modifier.semantics {
+                                        contentDescription = "Select ${it.name} page type"
+                                    }
+                                )
+                            }
+                        }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = pageContent,
+                        onValueChange = { pageContent = it },
+                        label = {
+                            Text(
+                                when (pageType) {
+                                    PageType.TEXT -> "Enter Text"
+                                    PageType.IMAGE -> "Enter Image URL"
+                                    PageType.PDF -> "Enter PDF URL"
+                                    PageType.AUDIO -> "Enter MP3 URL"
+                                    PageType.VIDEO -> "Enter MP4 URL"
+                                }
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics {
+                                testTag = "content_field"
+                                contentDescription = "Page content input"
+                            }
+                    )
                 }
             }
 
-            OutlinedTextField(
-                value = pageContent,
-                onValueChange = { pageContent = it },
-                label = {
-                    Text(
-                        when (pageType) {
-                            PageType.TEXT -> "Enter Text"
-                            PageType.IMAGE -> "Enter Image URL"
-                            PageType.PDF -> "Enter PDF URL"
-                            PageType.AUDIO -> "Enter MP3 URL"
-                            PageType.VIDEO -> "Enter MP4 URL"
-                        }
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+            errorMessage?.let {
+                Snackbar(
+                    modifier = Modifier.padding(top = 8.dp),
+                    action = {
+                        TextButton(onClick = { errorMessage = null }) { Text("Dismiss") }
+                    }
+                ) { Text(it) }
+            }
 
             Button(
                 onClick = {
-                    if (pageContent.isNotBlank()) {
-                        pages.add(
-                            LessonPage(
-                                id = UUID.randomUUID().toString(),
-                                type = pageType,
-                                content = pageContent
-                            )
-                        )
-                        pageContent = ""
+                    if (pageContent.isBlank()) {
+                        errorMessage = "Please enter page content"
+                        return@Button
                     }
+                    pages.add(
+                        LessonPage(
+                            id = UUID.randomUUID().toString(),
+                            type = pageType,
+                            content = pageContent
+                        )
+                    )
+                    pageContent = ""
+                    errorMessage = null
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .semantics {
+                        testTag = "add_page_button"
+                        contentDescription = "Add page to lesson"
+                    },
+                shape = MaterialTheme.shapes.medium
             ) {
                 Text("Add Page to Lesson")
             }
 
             if (pages.isNotEmpty()) {
-                Text("Pages Added: ${pages.size}", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = "Pages Added: ${pages.size}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.semantics {
+                        testTag = "pages_count"
+                        contentDescription = "Pages added: ${pages.size}"
+                    }
+                )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = {
-                    if (title.isNotBlank() && pages.isNotEmpty()) {
-                        coroutineScope.launch {
-                            viewModel.addLessonToCourse(courseId, title, pages)
-                            viewModel.refreshAllCourses() // ✅ 强制刷新以确保 CourseDetail 拿到新 lesson
-                            navController.popBackStack()
-                        }
+                    if (title.isBlank()) {
+                        errorMessage = "Please enter a lesson title"
+                        return@Button
+                    }
+                    if (pages.isEmpty()) {
+                        errorMessage = "Please add at least one page"
+                        return@Button
+                    }
+                    isLoading = true
+                    coroutineScope.launch {
+                        viewModel.addLessonToCourse(courseId, title, pages)
+                        viewModel.refreshAllCourses()
+                        isLoading = false
+                        navController.popBackStack()
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .semantics {
+                        testTag = "save_lesson_button"
+                        contentDescription = "Save lesson"
+                    },
+                shape = MaterialTheme.shapes.medium,
+                enabled = !isLoading
             ) {
-                Text("Save Lesson")
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Save Lesson")
+                }
             }
         }
     }
