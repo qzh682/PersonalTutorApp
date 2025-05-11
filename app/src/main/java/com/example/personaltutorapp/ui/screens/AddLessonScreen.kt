@@ -12,6 +12,7 @@ import com.example.personaltutorapp.model.LessonPage
 import com.example.personaltutorapp.model.PageType
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import java.util.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -19,8 +20,10 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
     var title by remember { mutableStateOf("") }
     var pageType by remember { mutableStateOf(PageType.TEXT) }
     var pageContent by remember { mutableStateOf("") }
-    var pages by remember { mutableStateOf(mutableListOf<LessonPage>()) }
+    val pages = remember { mutableStateListOf<LessonPage>() }
     var expanded by remember { mutableStateOf(false) }
+
+    val coroutineScope = rememberCoroutineScope()
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -114,8 +117,11 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
             Button(
                 onClick = {
                     if (title.isNotBlank() && pages.isNotEmpty()) {
-                        viewModel.addLessonToCourse(courseId, title, pages)
-                        navController.popBackStack()
+                        coroutineScope.launch {
+                            viewModel.addLessonToCourse(courseId, title, pages)
+                            viewModel.refreshAllCourses() // ✅ 强制刷新以确保 CourseDetail 拿到新 lesson
+                            navController.popBackStack()
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()

@@ -31,11 +31,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            refreshCourses()
+            refreshAllCourses()
         }
     }
 
-    private suspend fun refreshCourses() {
+    suspend fun refreshAllCourses() {
         val entities = courseDao.getAllCourses()
         _allCourses.value = entities.map {
             it.toCourseWithLessons(userDao, db.lessonDao(), db.lessonPageDao(), db.quizDao(), db.quizQuestionDao(), db.quizSubmissionDao())
@@ -101,7 +101,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             pendingUserIds = mutableListOf()
         )
         courseDao.insertCourse(course.toEntity())
-        refreshCourses()
+        refreshAllCourses()
     }
 
     fun getCoursesForCurrentUser(): List<Course> {
@@ -136,7 +136,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             lessonPageDao.insertPage(pageEntity)
         }
 
-        refreshCourses()
+        refreshAllCourses()
 
         course.enrolledUserIds.forEach { userId ->
             val user = userDao.getUserById(userId)?.toUser()
@@ -159,17 +159,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun markLessonCompleted(courseId: String, lessonId: String) = viewModelScope.launch {
-        val userId = _currentUser.value?.id ?: return@launch
-        val course = getCourseById(courseId) ?: return@launch
+    suspend fun markLessonCompleted(courseId: String, lessonId: String) {
+        val userId = _currentUser.value?.id ?: return
+        val course = getCourseById(courseId) ?: return
+
         val updatedLessons = course.lessons.map {
             if (it.id == lessonId && !it.completedByUserIds.contains(userId)) {
-                it.copy(completedByUserIds = (it.completedByUserIds + userId).toMutableList())
+                val updated = it.copy(completedByUserIds = (it.completedByUserIds + userId).toMutableList())
+                println("✅ Marked completed: ${updated.title}, by $userId")
+                updated
             } else it
         }
+
         val updatedCourse = course.copy(lessons = updatedLessons.toMutableList())
         courseDao.updateCourse(updatedCourse.toEntity())
-        refreshCourses()
+
+        println("🧩 Persisted updated course: ${updatedCourse.id}")
+        refreshAllCourses()
     }
 
     fun enrollInCourse(courseId: String) = viewModelScope.launch {
@@ -178,7 +184,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!course.pendingUserIds.contains(userId) && !course.enrolledUserIds.contains(userId)) {
             val updatedCourse = course.copy(pendingUserIds = (course.pendingUserIds + userId).toMutableList())
             courseDao.updateCourse(updatedCourse.toEntity())
-            refreshCourses()
+            refreshAllCourses()
         }
     }
 
@@ -187,7 +193,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val course = getCourseById(courseId) ?: return@launch
         val updatedCourse = course.copy(enrolledUserIds = (course.enrolledUserIds - userId).toMutableList())
         courseDao.updateCourse(updatedCourse.toEntity())
-        refreshCourses()
+        refreshAllCourses()
     }
 
     fun isEnrolled(courseId: String): Boolean {
@@ -207,14 +213,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             enrolledUserIds = (course.enrolledUserIds + userId).toMutableList()
         )
         courseDao.updateCourse(updatedCourse.toEntity())
-        refreshCourses()
+        refreshAllCourses()
     }
 
     fun rejectEnrollment(courseId: String, userId: String) = viewModelScope.launch {
         val course = getCourseById(courseId) ?: return@launch
         val updatedCourse = course.copy(pendingUserIds = (course.pendingUserIds - userId).toMutableList())
         courseDao.updateCourse(updatedCourse.toEntity())
-        refreshCourses()
+        refreshAllCourses()
     }
 
     suspend fun getUserById(userId: String): User? {
@@ -248,7 +254,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return lessonPageDao.getPagesForLesson(lessonId)
     }
 
-
     data class QuizResult(val studentName: String, val score: Int, val total: Int)
 
     suspend fun getQuizResults(courseId: String): List<QuizResult> {
@@ -281,9 +286,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             score = score
         )
         quizSubmissionDao.insertSubmission(submission)
-        refreshCourses()
+        refreshAllCourses()
     }
-
 
     fun addQuizToCourse(courseId: String, questions: List<QuizQuestion>) = viewModelScope.launch {
         val course = getCourseById(courseId) ?: return@launch
@@ -301,8 +305,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val questionEntities = questions.map { it.toEntity(quizId) }
         db.quizQuestionDao().insertAll(questionEntities)
 
-        refreshCourses()
+        refreshAllCourses()
     }
-
-
 }

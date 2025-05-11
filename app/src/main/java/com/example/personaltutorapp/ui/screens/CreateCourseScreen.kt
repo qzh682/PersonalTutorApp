@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.navigation.NavController
 import com.example.personaltutorapp.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,6 +22,7 @@ fun CreateCourseScreen(navController: NavController, viewModel: MainViewModel) {
     var expanded by remember { mutableStateOf(false) }
 
     val subjects = listOf("Computer Science", "Mathematics", "History", "Biology", "Art")
+    val coroutineScope = rememberCoroutineScope()
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -91,8 +93,11 @@ fun CreateCourseScreen(navController: NavController, viewModel: MainViewModel) {
             Button(
                 onClick = {
                     if (title.isNotBlank() && description.isNotBlank() && selectedSubject.isNotBlank()) {
-                        viewModel.createCourse(title, description, selectedSubject)
-                        navController.popBackStack()
+                        coroutineScope.launch {
+                            viewModel.createCourse(title, description, selectedSubject)
+                            viewModel.refreshAllCourses() // ✅ 确保刷新生效
+                            navController.popBackStack()
+                        }
                     }
                 },
                 modifier = Modifier

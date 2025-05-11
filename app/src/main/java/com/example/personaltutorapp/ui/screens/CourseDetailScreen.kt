@@ -20,7 +20,13 @@ fun CourseDetailScreen(
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
     val allCourses by viewModel.allCourses.collectAsState()
-    val course = allCourses.find { it.id == courseId }
+
+    val course by remember(allCourses, courseId) {
+        derivedStateOf {
+            allCourses.find { it.id == courseId }
+        }
+    }
+
 
     val pendingUsers = remember { mutableStateOf<List<User>>(emptyList()) }
 
@@ -36,14 +42,14 @@ fun CourseDetailScreen(
                 return@Column
             }
 
-            Text(text = course.title, style = MaterialTheme.typography.headlineLarge)
+            Text(text = course!!.title, style = MaterialTheme.typography.headlineLarge)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Subject: ${course.subject}", style = MaterialTheme.typography.titleMedium)
+            Text(text = "Subject: ${course!!.subject}", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = course.description, style = MaterialTheme.typography.bodyMedium)
+            Text(text = course!!.description, style = MaterialTheme.typography.bodyMedium)
             Spacer(modifier = Modifier.height(24.dp))
 
-            if (currentUser?.id == course.tutor.id) {
+            if (currentUser?.id == course!!.tutor.id) {
                 Button(
                     onClick = {
                         navController.navigate(NavRoutes.AddLesson.createRoute(courseId))
@@ -102,8 +108,8 @@ fun CourseDetailScreen(
                     }
                 }
             } else {
-                val isEnrolled = course.enrolledUserIds.contains(currentUser?.id)
-                val isPending = course.pendingUserIds.contains(currentUser?.id)
+                val isEnrolled = course!!.enrolledUserIds.contains(currentUser?.id)
+                val isPending = course!!.pendingUserIds.contains(currentUser?.id)
 
                 Button(
                     onClick = {
@@ -130,9 +136,9 @@ fun CourseDetailScreen(
             Text("Lessons", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
-            course.lessons.forEachIndexed { index, lesson ->
+            course!!.lessons.forEachIndexed { index, lesson ->
                 val completed = lesson.completedByUserIds.contains(currentUser?.id)
-                val unlocked = viewModel.canAccessLesson(course.lessons, index, currentUser?.id)
+                val unlocked = viewModel.canAccessLesson(course!!.lessons, index, currentUser?.id)
 
                 Card(
                     modifier = Modifier

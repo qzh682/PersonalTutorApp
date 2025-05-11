@@ -3,7 +3,6 @@ package com.example.personaltutorapp.data
 import android.content.Context
 import androidx.room.*
 import com.example.personaltutorapp.data.dao.*
-import com.example.personaltutorapp.db.Converters
 import com.example.personaltutorapp.model.*
 
 @Database(
@@ -19,7 +18,7 @@ import com.example.personaltutorapp.model.*
     version = 1,
     exportSchema = false
 )
-@TypeConverters(Converters::class)
+@TypeConverters(AppTypeConverters::class) // ✅ 修正此处
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun userDao(): UserDao

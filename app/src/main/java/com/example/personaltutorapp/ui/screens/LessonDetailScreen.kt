@@ -12,13 +12,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.personaltutorapp.model.PageType
 import com.example.personaltutorapp.viewmodel.MainViewModel
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import kotlinx.coroutines.launch
 
 @Composable
 fun LessonDetailScreen(
@@ -28,7 +26,16 @@ fun LessonDetailScreen(
     viewModel: MainViewModel
 ) {
     val context = LocalContext.current
-    val lesson = viewModel.getCourseById(courseId)?.lessons?.find { it.id == lessonId }
+    val coroutineScope = rememberCoroutineScope()
+    val allCourses by viewModel.allCourses.collectAsState()
+
+    // 🔄 自动随 allCourses 更新的 lesson 引用
+    val lesson by remember(allCourses, courseId, lessonId) {
+        derivedStateOf {
+            allCourses.find { it.id == courseId }
+                ?.lessons?.find { it.id == lessonId }
+        }
+    }
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -54,7 +61,6 @@ fun LessonDetailScreen(
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
                     }
-
                     PageType.IMAGE -> {
                         Image(
                             painter = rememberAsyncImagePainter(page.content),
@@ -65,7 +71,6 @@ fun LessonDetailScreen(
                                 .padding(vertical = 8.dp)
                         )
                     }
-
                     PageType.PDF -> {
                         Text(
                             text = "View PDF",
@@ -78,7 +83,6 @@ fun LessonDetailScreen(
                                 }
                         )
                     }
-
                     PageType.AUDIO -> {
                         Text(
                             text = "Play Audio",
@@ -93,7 +97,6 @@ fun LessonDetailScreen(
                                 }
                         )
                     }
-
                     PageType.VIDEO -> {
                         Text(
                             text = "Watch Video",
@@ -115,8 +118,11 @@ fun LessonDetailScreen(
 
             Button(
                 onClick = {
-                    viewModel.markLessonCompleted(courseId, lessonId)
-                    navController.popBackStack()
+                    coroutineScope.launch {
+                        viewModel.markLessonCompleted(courseId, lessonId)
+                        viewModel.refreshAllCourses()
+                        navController.popBackStack()
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
