@@ -6,6 +6,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.personaltutorapp.model.User
@@ -20,151 +24,295 @@ fun CourseDetailScreen(
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
     val allCourses by viewModel.allCourses.collectAsState()
-
     val course by remember(allCourses, courseId) {
-        derivedStateOf {
-            allCourses.find { it.id == courseId }
-        }
+        derivedStateOf { allCourses.find { it.id == courseId } }
     }
+    val pendingUsers by produceState(initialValue = emptyList<User>(), courseId) {
+        value = viewModel.getPendingRequests(courseId)
+    }
+    var isLoading by remember { mutableStateOf(true) }
 
-
-    val pendingUsers = remember { mutableStateOf<List<User>>(emptyList()) }
-
-    LaunchedEffect(courseId) {
-        val result = viewModel.getPendingRequests(courseId)
-        pendingUsers.value = result
+    LaunchedEffect(pendingUsers) {
+        isLoading = false
     }
 
     Surface(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            if (course == null) {
-                Text("Course not found or not yet loaded", style = MaterialTheme.typography.titleMedium)
-                return@Column
+        if (isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.semantics {
+                        testTag = "loading_indicator"
+                        contentDescription = "Loading"
+                    }
+                )
             }
-
-            Text(text = course!!.title, style = MaterialTheme.typography.headlineLarge)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Subject: ${course!!.subject}", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = course!!.description, style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.height(24.dp))
-
-            if (currentUser?.id == course!!.tutor.id) {
-                Button(
-                    onClick = {
-                        navController.navigate(NavRoutes.AddLesson.createRoute(courseId))
-                    },
-                    modifier = Modifier.fillMaxWidth()
+        } else if (course == null) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Course not found",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.semantics {
+                        testTag = "course_not_found"
+                        contentDescription = "Course not found"
+                    }
+                )
+            }
+        } else {
+            course?.let { course ->
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("Add Lesson")
-                }
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics {
+                                testTag = "course_header"
+                                contentDescription = "Course details"
+                            },
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = course.title,
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.semantics {
+                                    testTag = "course_title"
+                                    contentDescription = "Course title: ${course.title}"
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Subject: ${course.subject}",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.semantics {
+                                    testTag = "course_subject"
+                                    contentDescription = "Course subject: ${course.subject}"
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = course.description,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.semantics {
+                                    testTag = "course_description"
+                                    contentDescription = "Course description"
+                                }
+                            )
+                        }
+                    }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        navController.navigate(NavRoutes.QuizResults.createRoute(courseId))
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("View Quiz Results")
-                }
-
-                if (pendingUsers.value.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text("Pending Enrolment Requests", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    pendingUsers.value.forEach { user ->
-                        Card(
+                    if (currentUser?.id == course.tutor.id) {
+                        Button(
+                            onClick = { navController.navigate(NavRoutes.AddLesson.createRoute(courseId)) },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                .height(48.dp)
+                                .semantics {
+                                    testTag = "add_lesson_button"
+                                    contentDescription = "Add lesson"
+                                },
+                            shape = MaterialTheme.shapes.medium
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(user.displayName, modifier = Modifier.weight(1f))
-                                Row {
-                                    TextButton(onClick = {
-                                        viewModel.acceptEnrollment(courseId, user.id)
-                                    }) {
-                                        Text("Accept")
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    TextButton(onClick = {
-                                        viewModel.rejectEnrollment(courseId, user.id)
-                                    }) {
-                                        Text("Reject")
+                            Text("Add Lesson")
+                        }
+
+                        Button(
+                            onClick = { navController.navigate(NavRoutes.QuizResults.createRoute(courseId)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .semantics {
+                                    testTag = "quiz_results_button"
+                                    contentDescription = "View quiz results"
+                                },
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Text("View Quiz Results")
+                        }
+
+                        if (pendingUsers.isNotEmpty()) {
+                            Text(
+                                text = "Pending Enrolment Requests",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.semantics {
+                                    testTag = "pending_requests_title"
+                                    contentDescription = "Pending enrolment requests"
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            pendingUsers.forEach { user ->
+                                ElevatedCard(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp)
+                                        .semantics {
+                                            testTag = "pending_user_${user.id}"
+                                            contentDescription = "Pending enrolment request for ${user.displayName}"
+                                        },
+                                    shape = MaterialTheme.shapes.medium,
+                                    colors = CardDefaults.elevatedCardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = user.displayName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .semantics {
+                                                    testTag = "user_name_${user.id}"
+                                                    contentDescription = "User: ${user.displayName}"
+                                                }
+                                        )
+                                        Row {
+                                            TextButton(
+                                                onClick = { viewModel.acceptEnrollment(courseId, user.id) },
+                                                modifier = Modifier.semantics {
+                                                    testTag = "accept_button_${user.id}"
+                                                    contentDescription = "Accept request for ${user.displayName}"
+                                                }
+                                            ) {
+                                                Text("Accept")
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            TextButton(
+                                                onClick = { viewModel.rejectEnrollment(courseId, user.id) },
+                                                modifier = Modifier.semantics {
+                                                    testTag = "reject_button_${user.id}"
+                                                    contentDescription = "Reject request for ${user.displayName}"
+                                                }
+                                            ) {
+                                                Text("Reject")
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                }
-            } else {
-                val isEnrolled = course!!.enrolledUserIds.contains(currentUser?.id)
-                val isPending = course!!.pendingUserIds.contains(currentUser?.id)
+                    } else {
+                        val isEnrolled = course.enrolledUserIds.contains(currentUser?.id)
+                        val isPending = course.pendingUserIds.contains(currentUser?.id)
 
-                Button(
-                    onClick = {
-                        if (isEnrolled) {
-                            viewModel.unenrollFromCourse(courseId)
-                        } else if (!isPending) {
-                            viewModel.enrollInCourse(courseId)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isPending
-                ) {
-                    Text(
-                        when {
-                            isEnrolled -> "Unenroll from Course"
-                            isPending -> "Enrolment Pending"
-                            else -> "Request Enrolment"
-                        }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            Text("Lessons", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            course!!.lessons.forEachIndexed { index, lesson ->
-                val completed = lesson.completedByUserIds.contains(currentUser?.id)
-                val unlocked = viewModel.canAccessLesson(course!!.lessons, index, currentUser?.id)
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clickable(enabled = unlocked) {
-                            navController.navigate(
-                                NavRoutes.LessonDetail.createRoute(courseId, lesson.id)
-                            )
-                        },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (unlocked)
-                            MaterialTheme.colorScheme.surface
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Text(
-                        text = lesson.title +
-                                when {
-                                    completed -> " ✅"
-                                    !unlocked -> " 🔒"
-                                    else -> ""
+                        Button(
+                            onClick = {
+                                if (isEnrolled) viewModel.unenrollFromCourse(courseId)
+                                else if (!isPending) viewModel.enrollInCourse(courseId)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .semantics {
+                                    testTag = "enrollment_button"
+                                    contentDescription = when {
+                                        isEnrolled -> "Unenrol from ${course.title}"
+                                        isPending -> "Enrolment pending for ${course.title}"
+                                        else -> "Request enrolment in ${course.title}"
+                                    }
                                 },
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodyLarge
+                            shape = MaterialTheme.shapes.medium,
+                            enabled = !isPending
+                        ) {
+                            Text(
+                                when {
+                                    isEnrolled -> "Unenrol from Course"
+                                    isPending -> "Enrolment Pending"
+                                    else -> "Request Enrolment"
+                                }
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Lessons",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.semantics {
+                            testTag = "lessons_title"
+                            contentDescription = "Lessons list"
+                        }
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (course.lessons.isEmpty()) {
+                        Text(
+                            text = "No lessons available",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.semantics {
+                                testTag = "no_lessons_text"
+                                contentDescription = "No lessons available"
+                            }
+                        )
+                    } else {
+                        course.lessons.forEachIndexed { index, lesson ->
+                            val completed = lesson.completedByUserIds.contains(currentUser?.id)
+                            val unlocked = viewModel.canAccessLesson(course.lessons, index, currentUser?.id)
+
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                                    .clickable(enabled = unlocked) {
+                                        navController.navigate(NavRoutes.LessonDetail.createRoute(courseId, lesson.id))
+                                    }
+                                    .semantics {
+                                        testTag = "lesson_${lesson.id}"
+                                        contentDescription = "Lesson: ${lesson.title}, ${if (completed) "completed" else if (!unlocked) "locked" else "unlocked"}"
+                                    },
+                                shape = MaterialTheme.shapes.medium,
+                                colors = CardDefaults.elevatedCardColors(
+                                    containerColor = if (unlocked) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = lesson.title,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .semantics {
+                                                testTag = "lesson_title_${lesson.id}"
+                                                contentDescription = "Lesson title: ${lesson.title}"
+                                            }
+                                    )
+                                    Text(
+                                        text = when {
+                                            completed -> "✅"
+                                            !unlocked -> "🔒"
+                                            else -> ""
+                                        },
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.semantics {
+                                            testTag = "lesson_status_${lesson.id}"
+                                            contentDescription = if (completed) "Completed" else if (!unlocked) "Locked" else "Unlocked"
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
