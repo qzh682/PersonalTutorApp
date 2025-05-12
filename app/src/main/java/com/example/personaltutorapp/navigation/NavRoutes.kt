@@ -44,7 +44,6 @@ sealed class NavRoutes(val route: String) {
         }
     }
 
-    // Add the missing AddQuiz route
     object AddQuiz : NavRoutes("add_quiz/{courseId}") {
         fun createRoute(courseId: String): String {
             require(courseId.isNotBlank()) { "Course ID cannot be blank" }

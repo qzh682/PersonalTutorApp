@@ -1,6 +1,11 @@
 package com.example.personaltutorapp.model
 
-import com.example.personaltutorapp.data.dao.*
+import com.example.personaltutorapp.data.dao.UserDao
+import com.example.personaltutorapp.data.dao.LessonDao
+import com.example.personaltutorapp.data.dao.LessonPageDao
+import com.example.personaltutorapp.data.dao.QuizDao
+import com.example.personaltutorapp.data.dao.QuizQuestionDao
+import com.example.personaltutorapp.data.dao.QuizSubmissionDao
 
 suspend fun CourseEntity.toCourseWithLessons(
     userDao: UserDao,
@@ -38,7 +43,8 @@ suspend fun CourseEntity.toCourseWithLessons(
                 id = it.id,
                 courseId = id,
                 questions = quizQuestions.map { q -> q.toModel() },
-                submissions = quizSubmissions.map { s -> s.toModel() }
+                submissions = quizSubmissions.map { s -> s.toModel() },
+                isPublished = it.isPublished
             )
         } catch (e: Exception) {
             println("Failed to load quiz for course $id: ${e.message}")

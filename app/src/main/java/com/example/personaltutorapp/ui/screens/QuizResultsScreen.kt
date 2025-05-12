@@ -17,6 +17,11 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun QuizResultsScreen(courseId: String, navController: NavController, viewModel: MainViewModel) {
+    // Debug log to confirm screen is loaded
+    LaunchedEffect(Unit) {
+        println("INFO: QuizResultsScreen loaded for courseId: $courseId")
+    }
+
     val course = viewModel.getCourseById(courseId)
     var quizResults by remember { mutableStateOf<List<MainViewModel.QuizResult>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -189,10 +194,10 @@ private fun loadQuizResults(
     viewModel.viewModelScope.launch {
         try {
             val results = viewModel.getQuizResults(courseId)
-            println("Loaded quiz results for course $courseId: ${results.size} results")
+            println("INFO: Loaded quiz results for course $courseId: ${results.size} results")
             onResult(results, null)
         } catch (e: Exception) {
-            println("Failed to load quiz results: ${e.message}")
+            println("ERROR: Failed to load quiz results: ${e.message}")
             onResult(emptyList(), "Failed to load quiz results: ${e.message}")
         }
     }

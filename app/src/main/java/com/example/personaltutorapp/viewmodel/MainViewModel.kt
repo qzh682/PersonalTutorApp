@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
+import androidx.room.Transaction
+import kotlinx.coroutines.delay
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -48,9 +50,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun refreshAllCourses(): Result<Unit> {
         return try {
+            // Invalidate Room's query cache by closing and reopening the database
+            AppDatabase.closeDatabase()
             val entities = courseDao.getAllCourses()
             val courses = entities.map {
-                it.toCourseWithLessons(userDao, lessonDao, lessonPageDao, quizDao, quizQuestionDao, quizSubmissionDao)
+                val courseWithLessons = it.toCourseWithLessons(userDao, lessonDao, lessonPageDao, quizDao, quizQuestionDao, quizSubmissionDao)
+                logInfo("Refreshed course: ${courseWithLessons.id}, Quiz: ${courseWithLessons.quiz != null}, Published: ${courseWithLessons.quiz?.isPublished}")
+                courseWithLessons
             }
             _allCourses.value = courses
             logInfo("All courses refreshed successfully: ${courses.map { "${it.id} (Lessons: ${it.lessons.size}, Quiz: ${it.quiz != null}, Published: ${it.quiz?.isPublished})" }}")
@@ -60,6 +66,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _allCourses.value = emptyList()
             Result.failure(e)
         }
+    }
+
+    fun getCourseById(courseId: String): Course? {
+        return _allCourses.value.find { it.id == courseId }
     }
 
     private fun insertTestUsers() = viewModelScope.launch {
@@ -259,10 +269,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun getCoursesForCurrentUser(): List<Course> {
         val tutorId = _currentUser.value?.id ?: return emptyList()
         return _allCourses.value.filter { it.tutor.id == tutorId }
-    }
-
-    fun getCourseById(courseId: String): Course? {
-        return _allCourses.value.find { it.id == courseId }
     }
 
     fun addLessonToCourse(courseId: String, title: String, pages: List<LessonPage>, onResult: (Result<LessonEntity>) -> Unit) = viewModelScope.launch {
@@ -615,9 +621,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    @Transaction
     fun addQuizToCourse(courseId: String, questions: List<QuizQuestion>, onResult: (Result<QuizEntity>) -> Unit) = viewModelScope.launch {
         try {
-            // Validate quiz questions
             val validationError = validateQuizInput(questions)
             if (validationError != null) {
                 logError("Validation failed for quiz: $validationError")
@@ -631,22 +637,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            // Delete existing quiz if present
+            // Check if a quiz already exists
+            var quizEntity: QuizEntity
             val existingQuiz = quizDao.getQuizForCourse(courseId)
             if (existingQuiz != null) {
-                logInfo("Quiz already exists for course $courseId, deleting old quiz")
-                quizDao.deleteQuizAndQuestions(existingQuiz, quizQuestionDao)
+                logInfo("Quiz already exists for course $courseId, updating quiz questions")
+                // Delete existing questions
+                quizDao.deleteQuestionsForQuiz(existingQuiz.id)
+                quizEntity = existingQuiz.copy(isPublished = false) // Reset published status
+                quizDao.updateQuiz(quizEntity)
+            } else {
+                logInfo("No existing quiz for course $courseId, creating new quiz")
+                val quizId = UUID.randomUUID().toString()
+                quizEntity = QuizEntity(
+                    id = quizId,
+                    courseId = courseId,
+                    isPublished = false
+                )
+                quizDao.insertQuiz(quizEntity)
             }
 
-            // Create new quiz, unpublished by default
-            val quizId = UUID.randomUUID().toString()
-            val quizEntity = QuizEntity(
-                id = quizId,
-                courseId = courseId,
-                isPublished = false
-            )
-            insertQuizWithQuestions(quizEntity, questions)
-            logInfo("Quiz added to course $courseId successfully")
+            // Insert new questions
+            val questionEntities = questions.map { it.toEntity(quizEntity.id) }
+            quizQuestionDao.insertAllWithValidation(questionEntities)
+            logInfo("Inserted ${questionEntities.size} questions for quiz ${quizEntity.id}")
+
+            // Refresh courses to reflect the updated quiz
+            refreshAllCourses()
+            logInfo("Quiz added/updated for course $courseId successfully")
             onResult(Result.success(quizEntity))
         } catch (e: Exception) {
             logError("Failed to add quiz to course $courseId: ${e.message}")
@@ -654,6 +672,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    @Transaction
     fun publishQuiz(courseId: String, onResult: (Result<Unit>) -> Unit) = viewModelScope.launch {
         try {
             val course = getCourseById(courseId) ?: run {
@@ -669,8 +688,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val updatedQuiz = quiz.copy(isPublished = true)
             quizDao.updateQuiz(updatedQuiz)
-            logInfo("Quiz published for course $courseId")
-            refreshAllCourses()
+            logInfo("Quiz published for course $courseId in database")
+
+            // Ensure the database transaction is committed before refreshing
+            db.runInTransaction {
+                logInfo("Ensuring transaction commit for quiz update")
+            }
+
+            // Small delay to ensure database consistency (workaround for Room caching)
+            delay(500)
+
+            // Force refresh to ensure the latest data is fetched
+            val refreshResult = refreshAllCourses()
+            refreshResult.onSuccess {
+                logInfo("Courses refreshed after publishing quiz for course $courseId")
+            }.onFailure { e ->
+                logError("Failed to refresh courses after publishing quiz: ${e.message}")
+            }
+
             onResult(Result.success(Unit))
         } catch (e: Exception) {
             logError("Failed to publish quiz for course $courseId: ${e.message}")
@@ -678,6 +713,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    @Transaction
     fun unpublishQuiz(courseId: String, onResult: (Result<Unit>) -> Unit) = viewModelScope.launch {
         try {
             val course = getCourseById(courseId) ?: run {
@@ -693,8 +729,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val updatedQuiz = quiz.copy(isPublished = false)
             quizDao.updateQuiz(updatedQuiz)
-            logInfo("Quiz unpublished for course $courseId")
-            refreshAllCourses()
+            logInfo("Quiz unpublished for course $courseId in database")
+
+            // Ensure the database transaction is committed before refreshing
+            db.runInTransaction {
+                logInfo("Ensuring transaction commit for quiz update")
+            }
+
+            // Small delay to ensure database consistency (workaround for Room caching)
+            delay(500)
+
+            // Force refresh to ensure the latest data is fetched
+            val refreshResult = refreshAllCourses()
+            refreshResult.onSuccess {
+                logInfo("Courses refreshed after unpublishing quiz for course $courseId")
+            }.onFailure { e ->
+                logError("Failed to refresh courses after unpublishing quiz: ${e.message}")
+            }
+
             onResult(Result.success(Unit))
         } catch (e: Exception) {
             logError("Failed to unpublish quiz for course $courseId: ${e.message}")

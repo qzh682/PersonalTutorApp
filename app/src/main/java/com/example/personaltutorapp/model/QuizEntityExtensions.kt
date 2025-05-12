@@ -9,6 +9,7 @@ suspend fun QuizEntity.toQuiz(
 ): Quiz {
     println("Converting QuizEntity to Quiz: id=$id, isPublished=$isPublished")
     val questions = questionDao.getQuestionsForQuiz(id).map { it.toModel() }
+    println("Fetched questions for quiz $id: ${questions.map { it.question }}")
     val submissions = submissionDao.getSubmissionsForCourse(courseId).map { it.toModel() }
     return Quiz(
         id = id,

@@ -22,6 +22,7 @@ import coil.request.ImageRequest
 import com.example.personaltutorapp.model.Course
 import com.example.personaltutorapp.navigation.NavRoutes
 import com.example.personaltutorapp.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun StudentDashboard(
@@ -32,9 +33,14 @@ fun StudentDashboard(
     val allCourses by viewModel.allCourses.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
+    val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(allCourses) {
-        isLoading = false
+    // Refresh courses when the dashboard is loaded
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            viewModel.refreshAllCourses()
+            isLoading = false
+        }
     }
 
     val filteredCourses = allCourses.filter {
@@ -58,7 +64,7 @@ fun StudentDashboard(
                     val painter = rememberAsyncImagePainter(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(url)
-                            .size(48, 48) // 头像大小
+                            .size(48, 48)
                             .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
                             .diskCachePolicy(coil.request.CachePolicy.ENABLED)
                             .allowHardware(false)
@@ -142,6 +148,11 @@ fun StudentDashboard(
                         currentUserId = currentUser?.id,
                         onClick = {
                             navController.navigate(NavRoutes.CourseDetail.createRoute(course.id))
+                        },
+                        onTakeQuizClick = {
+                            if (course.quiz != null && course.quiz.isPublished) {
+                                navController.navigate(NavRoutes.TakeQuiz.createRoute(course.id))
+                            }
                         }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -155,7 +166,8 @@ fun StudentDashboard(
 fun CourseCardWithStatus(
     course: Course,
     currentUserId: String?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onTakeQuizClick: () -> Unit
 ) {
     ElevatedCard(
         modifier = Modifier
@@ -204,6 +216,43 @@ fun CourseCardWithStatus(
                                 contentDescription = "Enrolled status"
                             }
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        // Show quiz status and button to take quiz if published
+                        if (course.quiz != null) {
+                            Text(
+                                text = if (course.quiz.isPublished) "Quiz Available" else "Quiz Not Published",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.semantics {
+                                    testTag = "quiz_status_${course.id}"
+                                    contentDescription = if (course.quiz.isPublished) "Quiz available" else "Quiz not published"
+                                }
+                            )
+                            if (course.quiz.isPublished) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = onTakeQuizClick,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .semantics {
+                                            testTag = "take_quiz_button_${course.id}"
+                                            contentDescription = "Take quiz for ${course.title}"
+                                        },
+                                    shape = MaterialTheme.shapes.medium
+                                ) {
+                                    Text("Take Quiz")
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "No Quiz Available",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.semantics {
+                                    testTag = "no_quiz_status_${course.id}"
+                                    contentDescription = "No quiz available"
+                                }
+                            )
+                        }
                     }
                     course.pendingUserIds.contains(userId) -> {
                         Text(

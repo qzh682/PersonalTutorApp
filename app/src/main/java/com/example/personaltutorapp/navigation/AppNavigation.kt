@@ -30,13 +30,13 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
 
         composable(NavRoutes.StudentDashboard.route) {
             if (currentUser == null) {
-                println("User not logged in, redirecting to login")
+                println("INFO: User not logged in, redirecting to login from StudentDashboard")
                 navController.navigate(NavRoutes.Login.route) {
                     popUpTo(navController.graph.startDestinationId)
                     launchSingleTop = true
                 }
             } else if (currentUser?.role != "Student") {
-                println("User ${currentUser?.email} is not a student, redirecting to tutor dashboard")
+                println("INFO: User ${currentUser?.email} is not a student, redirecting to TutorDashboard")
                 navController.navigate(NavRoutes.TutorDashboard.route) {
                     popUpTo(navController.graph.startDestinationId)
                     launchSingleTop = true
@@ -48,13 +48,13 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
 
         composable(NavRoutes.TutorDashboard.route) {
             if (currentUser == null) {
-                println("User not logged in, redirecting to login")
+                println("INFO: User not logged in, redirecting to login from TutorDashboard")
                 navController.navigate(NavRoutes.Login.route) {
                     popUpTo(navController.graph.startDestinationId)
                     launchSingleTop = true
                 }
             } else if (currentUser?.role != "Tutor") {
-                println("User ${currentUser?.email} is not a tutor, redirecting to student dashboard")
+                println("INFO: User ${currentUser?.email} is not a tutor, redirecting to StudentDashboard")
                 navController.navigate(NavRoutes.StudentDashboard.route) {
                     popUpTo(navController.graph.startDestinationId)
                     launchSingleTop = true
@@ -66,7 +66,7 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
 
         composable(NavRoutes.CreateCourse.route) {
             if (currentUser == null || currentUser?.role != "Tutor") {
-                println("User ${currentUser?.email} is not a tutor or not logged in, redirecting to login")
+                println("INFO: User ${currentUser?.email} is not a tutor or not logged in, redirecting to login from CreateCourse")
                 navController.navigate(NavRoutes.Login.route) {
                     popUpTo(navController.graph.startDestinationId)
                     launchSingleTop = true
@@ -82,7 +82,7 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
         ) { backStackEntry ->
             val courseId = backStackEntry.arguments?.getString("courseId")
             if (courseId.isNullOrEmpty()) {
-                println("Invalid course ID for CourseDetail: $courseId")
+                println("ERROR: Invalid course ID for CourseDetail: $courseId")
                 ErrorScreen(
                     message = "Invalid course ID",
                     navController = navController,
@@ -99,14 +99,14 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
         ) { backStackEntry ->
             val courseId = backStackEntry.arguments?.getString("courseId")
             if (courseId.isNullOrEmpty()) {
-                println("Invalid course ID for AddLesson: $courseId")
+                println("ERROR: Invalid course ID for AddLesson: $courseId")
                 ErrorScreen(
                     message = "Invalid course ID",
                     navController = navController,
                     onRetry = { navController.popBackStack() }
                 )
             } else if (currentUser == null || currentUser?.role != "Tutor") {
-                println("User ${currentUser?.email} is not a tutor or not logged in, redirecting to login")
+                println("INFO: User ${currentUser?.email} is not a tutor or not logged in, redirecting to login from AddLesson")
                 navController.navigate(NavRoutes.Login.route) {
                     popUpTo(navController.graph.startDestinationId)
                     launchSingleTop = true
@@ -126,7 +126,7 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
             val courseId = backStackEntry.arguments?.getString("courseId")
             val lessonId = backStackEntry.arguments?.getString("lessonId")
             if (courseId.isNullOrEmpty() || lessonId.isNullOrEmpty()) {
-                println("Invalid parameters for LessonDetail: courseId=$courseId, lessonId=$lessonId")
+                println("ERROR: Invalid parameters for LessonDetail: courseId=$courseId, lessonId=$lessonId")
                 ErrorScreen(
                     message = "Invalid lesson or course ID",
                     navController = navController,
@@ -143,15 +143,21 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
         ) { backStackEntry ->
             val courseId = backStackEntry.arguments?.getString("courseId")
             if (courseId.isNullOrEmpty()) {
-                println("Invalid course ID for TakeQuiz: $courseId")
+                println("ERROR: Invalid course ID for TakeQuiz: $courseId")
                 ErrorScreen(
                     message = "Invalid course ID for quiz",
                     navController = navController,
                     onRetry = { navController.popBackStack() }
                 )
             } else if (currentUser == null) {
-                println("User not logged in, redirecting to login")
+                println("INFO: User not logged in, redirecting to login from TakeQuiz")
                 navController.navigate(NavRoutes.Login.route) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            } else if (currentUser?.role != "Student") {
+                println("INFO: User ${currentUser?.email} is not a student, redirecting to TutorDashboard from TakeQuiz")
+                navController.navigate(NavRoutes.TutorDashboard.route) {
                     popUpTo(navController.graph.startDestinationId)
                     launchSingleTop = true
                 }
@@ -166,14 +172,14 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
         ) { backStackEntry ->
             val courseId = backStackEntry.arguments?.getString("courseId")
             if (courseId.isNullOrEmpty()) {
-                println("Invalid course ID for QuizResults: $courseId")
+                println("ERROR: Invalid course ID for QuizResults: $courseId")
                 ErrorScreen(
                     message = "Invalid course ID for results",
                     navController = navController,
                     onRetry = { navController.popBackStack() }
                 )
             } else if (currentUser == null || currentUser?.role != "Tutor") {
-                println("User ${currentUser?.email} is not a tutor or not logged in, redirecting to login")
+                println("INFO: User ${currentUser?.email} is not a tutor or not logged in, redirecting to login from QuizResults")
                 navController.navigate(NavRoutes.Login.route) {
                     popUpTo(navController.graph.startDestinationId)
                     launchSingleTop = true
@@ -183,21 +189,20 @@ fun AppNavigation(viewModel: MainViewModel, navController: NavHostController = r
             }
         }
 
-        // Add handling for AddQuiz route
         composable(
             route = NavRoutes.AddQuiz.route,
             arguments = listOf(navArgument("courseId") { type = NavType.StringType })
         ) { backStackEntry ->
             val courseId = backStackEntry.arguments?.getString("courseId")
             if (courseId.isNullOrEmpty()) {
-                println("Invalid course ID for AddQuiz: $courseId")
+                println("ERROR: Invalid course ID for AddQuiz: $courseId")
                 ErrorScreen(
                     message = "Invalid course ID for adding quiz",
                     navController = navController,
                     onRetry = { navController.popBackStack() }
                 )
             } else if (currentUser == null || currentUser?.role != "Tutor") {
-                println("User ${currentUser?.email} is not a tutor or not logged in, redirecting to login")
+                println("INFO: User ${currentUser?.email} is not a tutor or not logged in, redirecting to login from AddQuiz")
                 navController.navigate(NavRoutes.Login.route) {
                     popUpTo(navController.graph.startDestinationId)
                     launchSingleTop = true
@@ -255,10 +260,12 @@ fun ErrorScreen(
                     Text("Retry")
                 }
                 Button(
-                    onClick = { navController.navigate(NavRoutes.Login.route) {
-                        popUpTo(navController.graph.startDestinationId)
-                        launchSingleTop = true
-                    } },
+                    onClick = {
+                        navController.navigate(NavRoutes.Login.route) {
+                            popUpTo(navController.graph.startDestinationId)
+                            launchSingleTop = true
+                        }
+                    },
                     modifier = Modifier.semantics {
                         testTag = "back_to_login_button"
                         contentDescription = "Back to login"
