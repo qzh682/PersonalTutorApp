@@ -16,6 +16,7 @@ import com.example.personaltutorapp.navigation.NavRoutes
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     navController: NavController,
@@ -25,7 +26,6 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
-    val currentUser by viewModel.currentUser.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -63,7 +63,8 @@ fun LoginScreen(
                             .semantics {
                                 testTag = "email_field"
                                 contentDescription = "Email input"
-                            }
+                            },
+                        isError = email.isBlank() && errorMessage != null
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -79,7 +80,8 @@ fun LoginScreen(
                             .semantics {
                                 testTag = "password_field"
                                 contentDescription = "Password input"
-                            }
+                            },
+                        isError = password.isBlank() && errorMessage != null
                     )
                 }
             }
@@ -99,18 +101,21 @@ fun LoginScreen(
                 onClick = {
                     if (email.isBlank()) {
                         errorMessage = "Please enter an email"
+                        println("Validation failed: Email is blank")
                         return@Button
                     }
                     if (password.isBlank()) {
                         errorMessage = "Please enter a password"
+                        println("Validation failed: Password is blank")
                         return@Button
                     }
                     isLoading = true
                     coroutineScope.launch {
-                        viewModel.login(email, password) { success ->
+                        viewModel.login(email, password) { result ->
                             isLoading = false
-                            if (success) {
-                                val destination = if (currentUser?.role == "Tutor") {
+                            result.onSuccess { user ->
+                                println("Login successful for user: ${user.email}")
+                                val destination = if (user.role == "Tutor") {
                                     NavRoutes.TutorDashboard.route
                                 } else {
                                     NavRoutes.StudentDashboard.route
@@ -118,8 +123,9 @@ fun LoginScreen(
                                 navController.navigate(destination) {
                                     popUpTo(NavRoutes.Login.route) { inclusive = true }
                                 }
-                            } else {
-                                errorMessage = "Invalid credentials. Please try again."
+                            }.onFailure { e ->
+                                errorMessage = "Failed to login: ${e.message}"
+                                println("Login failed for $email: ${e.message}")
                             }
                         }
                     }

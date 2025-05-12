@@ -41,7 +41,7 @@ fun CourseDetailScreen(
     }
 
     LaunchedEffect(pendingUsers) {
-        println("Pending users updated: $pendingUsers")
+        println("Pending users updated: ${pendingUsers.map { it.displayName }}")
     }
 
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -196,9 +196,16 @@ fun CourseDetailScreen(
                                                 onClick = {
                                                     loadingUsers[user.id] = true
                                                     coroutineScope.launch {
-                                                        viewModel.acceptEnrollment(courseId, user.id)
-                                                        loadingUsers[user.id] = false
-                                                        snackbarMessage = "Request from ${user.displayName} accepted"
+                                                        viewModel.acceptEnrollment(courseId, user.id) { result ->
+                                                            loadingUsers[user.id] = false
+                                                            result.onSuccess {
+                                                                snackbarMessage = "Request from ${user.displayName} accepted"
+                                                                println("Accepted enrolment for user ${user.id} in course $courseId")
+                                                            }.onFailure { e ->
+                                                                snackbarMessage = "Failed to accept request: ${e.message}"
+                                                                println("Failed to accept enrolment for user ${user.id}: ${e.message}")
+                                                            }
+                                                        }
                                                     }
                                                 },
                                                 modifier = Modifier.semantics {
@@ -220,9 +227,16 @@ fun CourseDetailScreen(
                                                 onClick = {
                                                     loadingUsers[user.id] = true
                                                     coroutineScope.launch {
-                                                        viewModel.rejectEnrollment(courseId, user.id)
-                                                        loadingUsers[user.id] = false
-                                                        snackbarMessage = "Request from ${user.displayName} rejected"
+                                                        viewModel.rejectEnrollment(courseId, user.id) { result ->
+                                                            loadingUsers[user.id] = false
+                                                            result.onSuccess {
+                                                                snackbarMessage = "Request from ${user.displayName} rejected"
+                                                                println("Rejected enrolment for user ${user.id} in course $courseId")
+                                                            }.onFailure { e ->
+                                                                snackbarMessage = "Failed to reject request: ${e.message}"
+                                                                println("Failed to reject enrolment for user ${user.id}: ${e.message}")
+                                                            }
+                                                        }
                                                     }
                                                 },
                                                 modifier = Modifier.semantics {
@@ -250,8 +264,29 @@ fun CourseDetailScreen(
 
                         Button(
                             onClick = {
-                                if (isEnrolled) viewModel.unenrollFromCourse(courseId)
-                                else if (!isPending) viewModel.enrollInCourse(courseId)
+                                coroutineScope.launch {
+                                    if (isEnrolled) {
+                                        viewModel.unenrollFromCourse(courseId) { result ->
+                                            result.onSuccess {
+                                                snackbarMessage = "Unenrolled from ${course.title}"
+                                                println("Unenrolled user ${currentUser?.id} from course $courseId")
+                                            }.onFailure { e ->
+                                                snackbarMessage = "Failed to unenrol: ${e.message}"
+                                                println("Failed to unenrol user ${currentUser?.id}: ${e.message}")
+                                            }
+                                        }
+                                    } else if (!isPending) {
+                                        viewModel.enrollInCourse(courseId) { result ->
+                                            result.onSuccess {
+                                                snackbarMessage = "Enrolment request sent for ${course.title}"
+                                                println("Requested enrolment for user ${currentUser?.id} in course $courseId")
+                                            }.onFailure { e ->
+                                                snackbarMessage = "Failed to request enrolment: ${e.message}"
+                                                println("Failed to request enrolment for user ${currentUser?.id}: ${e.message}")
+                                            }
+                                        }
+                                    }
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()

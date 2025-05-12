@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.example.personaltutorapp.model.QuizQuestionEntity
 
 @Dao
@@ -20,4 +21,13 @@ interface QuizQuestionDao {
 
     @Query("DELETE FROM quiz_questions WHERE quizId = :quizId")
     suspend fun deleteQuestionsForQuiz(quizId: String)
+
+    // 添加事务方法，确保批量插入问题时的一致性
+    @Transaction
+    suspend fun insertAllWithValidation(questions: List<QuizQuestionEntity>) {
+        if (questions.isEmpty()) {
+            throw IllegalArgumentException("Quiz questions list cannot be empty")
+        }
+        insertAll(questions)
+    }
 }

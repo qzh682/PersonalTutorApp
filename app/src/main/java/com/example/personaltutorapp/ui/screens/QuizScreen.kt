@@ -36,11 +36,11 @@ fun QuizScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No quiz available for this course",
+                    text = if (currentUser == null) "Please login to take the quiz" else "No quiz available for this course",
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.semantics {
                         testTag = "no_quiz_text"
-                        contentDescription = "No quiz available"
+                        contentDescription = if (currentUser == null) "Please login to take the quiz" else "No quiz available"
                     }
                 )
             }
@@ -60,6 +60,7 @@ fun QuizScreen(
                         currentIndex = 0
                         completed = false
                         score = 0
+                        println("Initialized quiz: ${quiz.questions.size} questions")
                     }
                 }
 
@@ -77,7 +78,8 @@ fun QuizScreen(
                                     testTag = "submission_card"
                                     contentDescription = "Quiz submission details"
                                 },
-                            shape = MaterialTheme.shapes.medium
+                            shape = MaterialTheme.shapes.medium,
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
@@ -137,7 +139,8 @@ fun QuizScreen(
                                         testTag = "question_card_${currentIndex}"
                                         contentDescription = "Question ${currentIndex + 1}"
                                     },
-                                shape = MaterialTheme.shapes.medium
+                                shape = MaterialTheme.shapes.medium,
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
@@ -219,7 +222,11 @@ fun QuizScreen(
                             ) {
                                 if (currentIndex > 0) {
                                     OutlinedButton(
-                                        onClick = { currentIndex-- },
+                                        onClick = {
+                                            currentIndex--
+                                            errorMessage = null
+                                            println("Moved to previous question: $currentIndex")
+                                        },
                                         modifier = Modifier
                                             .weight(1f)
                                             .height(48.dp)
@@ -239,11 +246,13 @@ fun QuizScreen(
                                     onClick = {
                                         if (selectedAnswers[currentIndex] == null) {
                                             errorMessage = "Please select an answer"
+                                            println("Validation failed: Answer not selected for question ${currentIndex + 1}")
                                             return@Button
                                         }
                                         if (currentIndex < quiz.questions.size - 1) {
                                             currentIndex++
                                             errorMessage = null
+                                            println("Moved to next question: ${currentIndex + 1}")
                                         } else {
                                             isLoading = true
                                             score = quiz.questions.mapIndexed { i, q ->
@@ -251,9 +260,16 @@ fun QuizScreen(
                                             }.sum()
 
                                             scope.launch {
-                                                viewModel.submitQuizResult(courseId, user.id, score)
-                                                isLoading = false
-                                                completed = true
+                                                viewModel.submitQuizResult(courseId, user.id, score) { result ->
+                                                    isLoading = false
+                                                    result.onSuccess {
+                                                        println("Quiz submitted successfully: Score=$score for user ${user.id}")
+                                                        completed = true
+                                                    }.onFailure { e ->
+                                                        errorMessage = "Failed to submit quiz: ${e.message}"
+                                                        println("Failed to submit quiz for user ${user.id}: ${e.message}")
+                                                    }
+                                                }
                                             }
                                         }
                                     },
@@ -286,7 +302,8 @@ fun QuizScreen(
                                     testTag = "quiz_result_card"
                                     contentDescription = "Quiz result"
                                 },
-                            shape = MaterialTheme.shapes.medium
+                            shape = MaterialTheme.shapes.medium,
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                         ) {
                             Column(
                                 modifier = Modifier.padding(16.dp),

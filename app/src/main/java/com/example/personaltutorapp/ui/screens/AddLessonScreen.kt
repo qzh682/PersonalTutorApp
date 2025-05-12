@@ -16,7 +16,7 @@ import com.example.personaltutorapp.model.LessonPage
 import com.example.personaltutorapp.model.PageType
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
-import java.util.*
+import java.util.UUID
 import java.util.regex.Pattern
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,9 +51,9 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
         )
         return when (type) {
             PageType.IMAGE -> imageUrlPattern.matcher(url).matches()
-            PageType.PDF -> strictUrlPattern.matcher(url).matches() && url.endsWith("pdf", true)
-            PageType.AUDIO -> strictUrlPattern.matcher(url).matches() && url.endsWith("mp3", true)
-            PageType.VIDEO -> strictUrlPattern.matcher(url).matches() && url.endsWith("mp4", true)
+            PageType.PDF -> strictUrlPattern.matcher(url).matches() && url.endsWith("pdf", ignoreCase = true)
+            PageType.AUDIO -> strictUrlPattern.matcher(url).matches() && url.endsWith("mp3", ignoreCase = true)
+            PageType.VIDEO -> strictUrlPattern.matcher(url).matches() && url.endsWith("mp4", ignoreCase = true)
             else -> true // TEXT 类型不需要 URL 验证
         }
     }
@@ -91,7 +91,8 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                                 testTag = "title_field"
                                 contentDescription = "Lesson title input"
                             },
-                        enabled = !isLoading
+                        enabled = !isLoading,
+                        isError = title.isBlank() && errorMessage != null
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -157,7 +158,8 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                                 testTag = "content_field"
                                 contentDescription = "Page content input"
                             },
-                        enabled = !isLoading
+                        enabled = !isLoading,
+                        isError = pageContent.isBlank() && errorMessage != null
                     )
 
                     // 仅在 PageType 为 IMAGE 时显示提示
@@ -217,6 +219,7 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                 onClick = {
                     if (pageContent.isBlank()) {
                         errorMessage = "Please enter page content"
+                        println("Validation failed: Page content is blank")
                         return@Button
                     }
                     if (!isValidUrl(pageContent, pageType)) {
@@ -227,17 +230,23 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                             PageType.VIDEO -> "Invalid URL format for ${pageType.name}. Please use a valid URL ending with mp4"
                             else -> "Invalid URL format"
                         }
+                        println("Validation failed: $errorMessage")
                         return@Button
                     }
-                    val newPage = LessonPage(
-                        id = UUID.randomUUID().toString(),
-                        type = pageType,
-                        content = pageContent
-                    )
-                    pages.add(newPage)
-                    println("Added page: $newPage")
-                    pageContent = ""
-                    errorMessage = null
+                    try {
+                        val newPage = LessonPage(
+                            id = UUID.randomUUID().toString(),
+                            type = pageType,
+                            content = pageContent
+                        )
+                        pages.add(newPage)
+                        println("Added page: Type=${newPage.type}, Content=${newPage.content}")
+                        pageContent = ""
+                        errorMessage = null
+                    } catch (e: IllegalArgumentException) {
+                        errorMessage = "Invalid page: ${e.message}"
+                        println("Failed to add page: ${e.message}")
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -258,23 +267,25 @@ fun AddLessonScreen(courseId: String, navController: NavController, viewModel: M
                 onClick = {
                     if (title.isBlank()) {
                         errorMessage = "Please enter a lesson title"
+                        println("Validation failed: Lesson title is blank")
                         return@Button
                     }
                     if (pages.isEmpty()) {
                         errorMessage = "Please add at least one page"
+                        println("Validation failed: At least one page required")
                         return@Button
                     }
                     isLoading = true
                     coroutineScope.launch {
-                        try {
-                            viewModel.addLessonToCourse(courseId, title, pages)
-                            viewModel.refreshAllCourses()
-                            println("Lesson saved: $title with ${pages.size} pages")
+                        viewModel.addLessonToCourse(courseId, title, pages) { result ->
                             isLoading = false
-                            navController.popBackStack()
-                        } catch (e: Exception) {
-                            errorMessage = "Failed to save lesson: ${e.message}"
-                            isLoading = false
+                            result.onSuccess {
+                                println("Lesson saved successfully: $title with ${pages.size} pages")
+                                navController.popBackStack()
+                            }.onFailure { e ->
+                                errorMessage = "Failed to save lesson: ${e.message}"
+                                println("Failed to save lesson: ${e.message}")
+                            }
                         }
                     }
                 },

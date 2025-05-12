@@ -1,6 +1,7 @@
 package com.example.personaltutorapp.model
 
-fun QuizQuestionEntity.toQuizQuestion(): QuizQuestion {
+fun QuizQuestionEntity.toModel(): QuizQuestion {
+    println("Converting QuizQuestionEntity to QuizQuestion: id=$id")
     return QuizQuestion(
         id = id,
         question = question,
@@ -10,21 +11,12 @@ fun QuizQuestionEntity.toQuizQuestion(): QuizQuestion {
 }
 
 fun QuizQuestion.toEntity(quizId: String): QuizQuestionEntity {
+    println("Converting QuizQuestion to QuizQuestionEntity: id=$id, quizId=$quizId")
     return QuizQuestionEntity(
         id = id,
         question = question,
         options = options,
         correctAnswerIndex = correctAnswerIndex,
         quizId = quizId
-    )
-}
-
-
-fun QuizQuestionEntity.toModel(): QuizQuestion {
-    return QuizQuestion(
-        id = id,
-        question = question,
-        options = options,
-        correctAnswerIndex = correctAnswerIndex
     )
 }

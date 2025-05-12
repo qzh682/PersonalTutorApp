@@ -18,6 +18,13 @@ import com.example.personaltutorapp.model.User
 import com.example.personaltutorapp.navigation.NavRoutes
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.shape.CircleShape
 
 @Composable
 fun TutorDashboard(
@@ -27,11 +34,12 @@ fun TutorDashboard(
     val currentUser by viewModel.currentUser.collectAsState()
     val courses = viewModel.getCoursesForCurrentUser()
     val pendingUsersMap = remember { mutableStateMapOf<String, List<User>>() }
+    val loadingUsers = remember { mutableStateMapOf<String, Boolean>() }
     val coroutineScope = rememberCoroutineScope()
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
 
-    // ✅ 异步加载每门课程的 pending users
+    // Load pending users for each course
     LaunchedEffect(courses) {
         isLoading = true
         try {
@@ -41,10 +49,12 @@ fun TutorDashboard(
                         viewModel.getUserById(userId)
                     }
                     pendingUsersMap[course.id] = users
+                    println("Loaded ${users.size} pending users for course ${course.id}")
                 }
             }
         } catch (e: Exception) {
-            errorMessage = "Failed to load pending requests"
+            snackbarMessage = "Failed to load pending requests: ${e.message}"
+            println("Failed to load pending requests: ${e.message}")
         } finally {
             isLoading = false
         }
@@ -57,25 +67,59 @@ fun TutorDashboard(
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            currentUser?.let { user ->
-                Text(
-                    text = "Welcome, ${user.displayName}",
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // 显示用户头像
+                currentUser?.profileImageUrl?.let { url ->
+                    val painter = rememberAsyncImagePainter(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(url)
+                            .size(48, 48) // 头像大小
+                            .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                            .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                            .allowHardware(false)
+                            .build(),
+                        placeholder = painterResource(id = android.R.drawable.ic_menu_gallery),
+                        error = painterResource(id = android.R.drawable.ic_menu_report_image)
+                    )
+                    Image(
+                        painter = painter,
+                        contentDescription = "User profile image",
+                        modifier = Modifier
+                            .size(48.dp)
+                            .graphicsLayer {
+                                clip = true
+                                shape = CircleShape
+                            }
+                            .semantics {
+                                testTag = "profile_image"
+                            }
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+
+                currentUser?.let { user ->
+                    Text(
+                        text = "Welcome, ${user.displayName}",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics {
+                            testTag = "welcome_text"
+                            contentDescription = "Welcome message for ${user.displayName}"
+                        }
+                    )
+                } ?: Text(
+                    text = "Welcome, Tutor",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.semantics {
                         testTag = "welcome_text"
-                        contentDescription = "Welcome message for ${user.displayName}"
+                        contentDescription = "Welcome message"
                     }
                 )
-            } ?: Text(
-                text = "Welcome, Tutor",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.semantics {
-                    testTag = "welcome_text"
-                    contentDescription = "Welcome message"
-                }
-            )
+            }
 
             Button(
                 onClick = { navController.navigate(NavRoutes.CreateCourse.route) },
@@ -164,21 +208,100 @@ fun TutorDashboard(
                                         contentDescription = "Progress bar: $avgProgress percent"
                                     }
                                 )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Button(
-                                    onClick = {
-                                        navController.navigate(NavRoutes.QuizResults.createRoute(course.id))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                // Display quiz status
+                                Text(
+                                    text = when {
+                                        course.quiz == null -> "No Quiz Available"
+                                        course.quiz.isPublished -> "Quiz Published"
+                                        else -> "Quiz Not Published"
                                     },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(48.dp)
-                                        .semantics {
-                                            testTag = "quiz_results_button_${course.id}"
-                                            contentDescription = "View quiz results for ${course.title}"
-                                        },
-                                    shape = MaterialTheme.shapes.medium
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.semantics {
+                                        testTag = "quiz_status_${course.id}"
+                                        contentDescription = when {
+                                            course.quiz == null -> "No quiz available"
+                                            course.quiz.isPublished -> "Quiz published"
+                                            else -> "Quiz not published"
+                                        }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text("View Quiz Results")
+                                    if (course.quiz == null) {
+                                        Button(
+                                            onClick = {
+                                                navController.navigate(NavRoutes.AddQuiz.createRoute(course.id))
+                                            },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(48.dp)
+                                                .semantics {
+                                                    testTag = "add_quiz_button_${course.id}"
+                                                    contentDescription = "Add quiz for ${course.title}"
+                                                },
+                                            shape = MaterialTheme.shapes.medium
+                                        ) {
+                                            Text("Add Quiz")
+                                        }
+                                    } else {
+                                        Button(
+                                            onClick = {
+                                                coroutineScope.launch {
+                                                    if (course.quiz.isPublished) {
+                                                        viewModel.unpublishQuiz(course.id) { result ->
+                                                            result.onSuccess {
+                                                                snackbarMessage = "Quiz unpublished successfully"
+                                                                println("Quiz unpublished for course ${course.id}")
+                                                            }.onFailure { e ->
+                                                                snackbarMessage = "Failed to unpublish quiz: ${e.message}"
+                                                                println("Failed to unpublish quiz: ${e.message}")
+                                                            }
+                                                        }
+                                                    } else {
+                                                        viewModel.publishQuiz(course.id) { result ->
+                                                            result.onSuccess {
+                                                                snackbarMessage = "Quiz published successfully"
+                                                                println("Quiz published for course ${course.id}")
+                                                            }.onFailure { e ->
+                                                                snackbarMessage = "Failed to publish quiz: ${e.message}"
+                                                                println("Failed to publish quiz: ${e.message}")
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(48.dp)
+                                                .semantics {
+                                                    testTag = "publish_quiz_button_${course.id}"
+                                                    contentDescription = if (course.quiz.isPublished) "Unpublish quiz" else "Publish quiz"
+                                                },
+                                            shape = MaterialTheme.shapes.medium
+                                        ) {
+                                            Text(if (course.quiz.isPublished) "Unpublish" else "Publish")
+                                        }
+                                    }
+                                    Button(
+                                        onClick = {
+                                            navController.navigate(NavRoutes.QuizResults.createRoute(course.id))
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                            .semantics {
+                                                testTag = "quiz_results_button_${course.id}"
+                                                contentDescription = "View quiz results for ${course.title}"
+                                            },
+                                        shape = MaterialTheme.shapes.medium,
+                                        enabled = course.quiz != null
+                                    ) {
+                                        Text("View Quiz Results")
+                                    }
                                 }
                             }
                         }
@@ -229,26 +352,64 @@ fun TutorDashboard(
                                         Row {
                                             TextButton(
                                                 onClick = {
-                                                    viewModel.acceptEnrollment(course.id, pendingUser.id)
+                                                    loadingUsers[pendingUser.id] = true
+                                                    coroutineScope.launch {
+                                                        viewModel.acceptEnrollment(course.id, pendingUser.id) { result ->
+                                                            loadingUsers[pendingUser.id] = false
+                                                            result.onSuccess {
+                                                                snackbarMessage = "Request from ${pendingUser.displayName} accepted"
+                                                                println("Accepted enrolment for user ${pendingUser.id} in course ${course.id}")
+                                                            }.onFailure { e ->
+                                                                snackbarMessage = "Failed to accept request: ${e.message}"
+                                                                println("Failed to accept enrolment for user ${pendingUser.id}: ${e.message}")
+                                                            }
+                                                        }
+                                                    }
                                                 },
                                                 modifier = Modifier.semantics {
                                                     testTag = "accept_button_${pendingUser.id}_${course.id}"
                                                     contentDescription = "Accept request for ${pendingUser.displayName}"
-                                                }
+                                                },
+                                                enabled = loadingUsers[pendingUser.id] != true
                                             ) {
-                                                Text("Accept")
+                                                if (loadingUsers[pendingUser.id] == true) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                } else {
+                                                    Text("Accept")
+                                                }
                                             }
                                             Spacer(modifier = Modifier.width(8.dp))
                                             TextButton(
                                                 onClick = {
-                                                    viewModel.rejectEnrollment(course.id, pendingUser.id)
+                                                    loadingUsers[pendingUser.id] = true
+                                                    coroutineScope.launch {
+                                                        viewModel.rejectEnrollment(course.id, pendingUser.id) { result ->
+                                                            loadingUsers[pendingUser.id] = false
+                                                            result.onSuccess {
+                                                                snackbarMessage = "Request from ${pendingUser.displayName} rejected"
+                                                                println("Rejected enrolment for user ${pendingUser.id} in course ${course.id}")
+                                                            }.onFailure { e ->
+                                                                snackbarMessage = "Failed to reject request: ${e.message}"
+                                                                println("Failed to reject enrolment for user ${pendingUser.id}: ${e.message}")
+                                                            }
+                                                        }
+                                                    }
                                                 },
                                                 modifier = Modifier.semantics {
                                                     testTag = "reject_button_${pendingUser.id}_${course.id}"
                                                     contentDescription = "Reject request for ${pendingUser.displayName}"
-                                                }
+                                                },
+                                                enabled = loadingUsers[pendingUser.id] != true
                                             ) {
-                                                Text("Reject")
+                                                if (loadingUsers[pendingUser.id] == true) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                } else {
+                                                    Text("Reject")
+                                                }
                                             }
                                         }
                                     }
@@ -259,13 +420,13 @@ fun TutorDashboard(
                 }
             }
 
-            errorMessage?.let {
+            snackbarMessage?.let { message ->
                 Snackbar(
                     modifier = Modifier.padding(top = 8.dp),
                     action = {
-                        TextButton(onClick = { errorMessage = null }) { Text("Dismiss") }
+                        TextButton(onClick = { snackbarMessage = null }) { Text("Dismiss") }
                     }
-                ) { Text(it) }
+                ) { Text(message) }
             }
         }
     }

@@ -2,35 +2,24 @@ package com.example.personaltutorapp.model
 
 import com.example.personaltutorapp.data.dao.LessonPageDao
 
-suspend fun LessonEntity.toLessonWithPages(pageDao: LessonPageDao): Lesson {
+suspend fun LessonEntity.toLesson(pageDao: LessonPageDao): Lesson {
+    println("Converting LessonEntity to Lesson: id=$id")
     val pagesFromDb = pageDao.getPagesForLesson(id)
         .map { it.toLessonPage() }
-
-    return Lesson(
-        id = this.id,
-        title = this.title,
-        pages = pagesFromDb.toMutableList(),
-        completedByUserIds = this.completedByUserIds.toMutableList()
-    )
-}
-
-fun LessonEntity.toLesson(): Lesson {
     return Lesson(
         id = id,
         title = title,
-        pages = pages.toMutableList(),
-        completedByUserIds = completedByUserIds.toMutableList()
+        completedByUserIds = completedByUserIds.toMutableList(),
+        pages = pagesFromDb.toMutableList()
     )
 }
 
 fun Lesson.toEntity(courseId: String): LessonEntity {
+    println("Converting Lesson to LessonEntity: id=$id")
     return LessonEntity(
         id = id,
         courseId = courseId,
         title = title,
-        pages = pages,
         completedByUserIds = completedByUserIds
     )
 }
-
-

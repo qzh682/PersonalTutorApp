@@ -6,4 +6,9 @@ package com.example.personaltutorapp.model
 data class QuizSubmission(
     val userId: String,
     val score: Int
-)
+) {
+    init {
+        require(userId.isNotBlank()) { "User ID cannot be blank" }
+        require(score >= 0) { "Score cannot be negative" }
+    }
+}

@@ -64,7 +64,8 @@ fun RegisterScreen(navController: NavController, viewModel: MainViewModel) {
                             .semantics {
                                 testTag = "email_field"
                                 contentDescription = "Email input"
-                            }
+                            },
+                        isError = email.isBlank() && errorMessage != null
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -78,7 +79,8 @@ fun RegisterScreen(navController: NavController, viewModel: MainViewModel) {
                             .semantics {
                                 testTag = "password_field"
                                 contentDescription = "Password input"
-                            }
+                            },
+                        isError = password.isBlank() && errorMessage != null
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -91,7 +93,8 @@ fun RegisterScreen(navController: NavController, viewModel: MainViewModel) {
                             .semantics {
                                 testTag = "display_name_field"
                                 contentDescription = "Display name input"
-                            }
+                            },
+                        isError = displayName.isBlank() && errorMessage != null
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -185,14 +188,17 @@ fun RegisterScreen(navController: NavController, viewModel: MainViewModel) {
                 onClick = {
                     if (email.isBlank()) {
                         errorMessage = "Please enter an email"
+                        println("Validation failed: Email is blank")
                         return@Button
                     }
                     if (password.isBlank()) {
                         errorMessage = "Please enter a password"
+                        println("Validation failed: Password is blank")
                         return@Button
                     }
                     if (displayName.isBlank()) {
                         errorMessage = "Please enter a display name"
+                        println("Validation failed: Display name is blank")
                         return@Button
                     }
                     isLoading = true
@@ -204,14 +210,16 @@ fun RegisterScreen(navController: NavController, viewModel: MainViewModel) {
                             role = role,
                             bio = bio,
                             profileImageUrl = profileImageUrl
-                        ) { success ->
+                        ) { result ->
                             isLoading = false
-                            if (success) {
+                            result.onSuccess { user ->
+                                println("Registration successful for user: ${user.email}")
                                 navController.navigate(NavRoutes.Login.route) {
                                     popUpTo(NavRoutes.Register.route) { inclusive = true }
                                 }
-                            } else {
-                                errorMessage = "Email already registered"
+                            }.onFailure { e ->
+                                errorMessage = "Failed to register: ${e.message}"
+                                println("Registration failed for $email: ${e.message}")
                             }
                         }
                     }

@@ -1,17 +1,29 @@
 package com.example.personaltutorapp.model
 
-fun QuizEntity.toQuiz(): Quiz {
+import com.example.personaltutorapp.data.dao.QuizQuestionDao
+import com.example.personaltutorapp.data.dao.QuizSubmissionDao
+
+suspend fun QuizEntity.toQuiz(
+    questionDao: QuizQuestionDao,
+    submissionDao: QuizSubmissionDao
+): Quiz {
+    println("Converting QuizEntity to Quiz: id=$id, isPublished=$isPublished")
+    val questions = questionDao.getQuestionsForQuiz(id).map { it.toModel() }
+    val submissions = submissionDao.getSubmissionsForCourse(courseId).map { it.toModel() }
     return Quiz(
-        id = this.id,
-        courseId = this.courseId,
-        questions = this.questions
+        id = id,
+        courseId = courseId,
+        questions = questions,
+        submissions = submissions,
+        isPublished = isPublished
     )
 }
 
 fun Quiz.toEntity(): QuizEntity {
+    println("Converting Quiz to QuizEntity: id=$id, isPublished=$isPublished")
     return QuizEntity(
-        id = this.id,
-        courseId = this.courseId,
-        questions = this.questions
+        id = id,
+        courseId = courseId,
+        isPublished = isPublished
     )
 }

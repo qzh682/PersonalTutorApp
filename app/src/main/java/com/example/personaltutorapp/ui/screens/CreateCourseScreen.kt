@@ -64,7 +64,8 @@ fun CreateCourseScreen(navController: NavController, viewModel: MainViewModel) {
                             .semantics {
                                 testTag = "title_field"
                                 contentDescription = "Course title input"
-                            }
+                            },
+                        isError = title.isBlank() && errorMessage != null
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -79,7 +80,8 @@ fun CreateCourseScreen(navController: NavController, viewModel: MainViewModel) {
                             .semantics {
                                 testTag = "description_field"
                                 contentDescription = "Course description input"
-                            }
+                            },
+                        isError = description.isBlank() && errorMessage != null
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -105,7 +107,8 @@ fun CreateCourseScreen(navController: NavController, viewModel: MainViewModel) {
                                 .semantics {
                                     testTag = "subject_dropdown"
                                     contentDescription = "Subject selection"
-                                }
+                                },
+                            isError = selectedSubject.isBlank() && errorMessage != null
                         )
                         ExposedDropdownMenu(
                             expanded = expanded,
@@ -143,22 +146,31 @@ fun CreateCourseScreen(navController: NavController, viewModel: MainViewModel) {
                 onClick = {
                     if (title.isBlank()) {
                         errorMessage = "Please enter a course title"
+                        println("Validation failed: Course title is blank")
                         return@Button
                     }
                     if (description.isBlank()) {
                         errorMessage = "Please enter a course description"
+                        println("Validation failed: Course description is blank")
                         return@Button
                     }
                     if (selectedSubject.isBlank()) {
                         errorMessage = "Please select a subject"
+                        println("Validation failed: Subject not selected")
                         return@Button
                     }
                     isLoading = true
                     coroutineScope.launch {
-                        viewModel.createCourse(title, description, selectedSubject)
-                        viewModel.refreshAllCourses()
-                        isLoading = false
-                        navController.popBackStack()
+                        viewModel.createCourse(title, description, selectedSubject) { result ->
+                            isLoading = false
+                            result.onSuccess {
+                                println("Course created successfully: $title")
+                                navController.popBackStack()
+                            }.onFailure { e ->
+                                errorMessage = "Failed to create course: ${e.message}"
+                                println("Failed to create course: ${e.message}")
+                            }
+                        }
                     }
                 },
                 modifier = Modifier

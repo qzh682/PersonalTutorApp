@@ -17,5 +17,14 @@ interface QuizSubmissionDao {
 
     @Delete
     suspend fun deleteSubmission(submission: QuizSubmissionEntity)
-}
 
+    // 添加事务方法，确保删除和插入提交时的一致性
+    @Transaction
+    suspend fun updateSubmission(courseId: String, userId: String, submission: QuizSubmissionEntity) {
+        val existing = getSubmission(courseId, userId)
+        if (existing != null) {
+            deleteSubmission(existing)
+        }
+        insertSubmission(submission)
+    }
+}

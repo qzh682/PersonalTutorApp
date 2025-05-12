@@ -1,8 +1,9 @@
 package com.example.personaltutorapp.model
 
-fun QuizSubmission.toEntity(courseId: String): QuizSubmissionEntity {
+fun QuizSubmission.toEntity(id: String, courseId: String): QuizSubmissionEntity {
+    println("Converting QuizSubmission to QuizSubmissionEntity: id=$id, userId=$userId")
     return QuizSubmissionEntity(
-        id = "$courseId-$userId",
+        id = id,
         courseId = courseId,
         userId = userId,
         score = score
@@ -10,10 +11,9 @@ fun QuizSubmission.toEntity(courseId: String): QuizSubmissionEntity {
 }
 
 fun QuizSubmissionEntity.toModel(): QuizSubmission {
+    println("Converting QuizSubmissionEntity to QuizSubmission: id=$id")
     return QuizSubmission(
         userId = userId,
         score = score
     )
 }
-
-

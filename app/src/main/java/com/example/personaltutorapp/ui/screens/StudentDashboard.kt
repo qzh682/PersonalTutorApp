@@ -1,17 +1,24 @@
 package com.example.personaltutorapp.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.navigation.NavController
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
 import com.example.personaltutorapp.model.Course
 import com.example.personaltutorapp.navigation.NavRoutes
 import com.example.personaltutorapp.viewmodel.MainViewModel
@@ -42,15 +49,49 @@ fun StudentDashboard(
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "Welcome, ${currentUser?.displayName ?: "Student"}",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.semantics {
-                    testTag = "welcome_text"
-                    contentDescription = "Welcome message"
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // 显示用户头像
+                currentUser?.profileImageUrl?.let { url ->
+                    val painter = rememberAsyncImagePainter(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(url)
+                            .size(48, 48) // 头像大小
+                            .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                            .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                            .allowHardware(false)
+                            .build(),
+                        placeholder = painterResource(id = android.R.drawable.ic_menu_gallery),
+                        error = painterResource(id = android.R.drawable.ic_menu_report_image)
+                    )
+                    Image(
+                        painter = painter,
+                        contentDescription = "User profile image",
+                        modifier = Modifier
+                            .size(48.dp)
+                            .graphicsLayer {
+                                clip = true
+                                shape = CircleShape
+                            }
+                            .semantics {
+                                testTag = "profile_image"
+                            }
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
                 }
-            )
+
+                Text(
+                    text = "Welcome, ${currentUser?.displayName ?: "Student"}",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics {
+                        testTag = "welcome_text"
+                        contentDescription = "Welcome message"
+                    }
+                )
+            }
 
             OutlinedTextField(
                 value = searchQuery,

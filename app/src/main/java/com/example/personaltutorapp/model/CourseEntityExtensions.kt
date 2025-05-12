@@ -1,7 +1,6 @@
 package com.example.personaltutorapp.model
 
 import com.example.personaltutorapp.data.dao.*
-import com.example.personaltutorapp.model.toModel
 
 suspend fun CourseEntity.toCourseWithLessons(
     userDao: UserDao,
@@ -11,23 +10,40 @@ suspend fun CourseEntity.toCourseWithLessons(
     quizQuestionDao: QuizQuestionDao,
     quizSubmissionDao: QuizSubmissionDao
 ): Course {
-    val tutor = userDao.getUserById(tutorId)?.toUser()
-        ?: throw IllegalStateException("Tutor not found for ID $tutorId")
+    println("Converting CourseEntity to Course: id=$id")
+    val tutor = try {
+        userDao.getUserById(tutorId)?.toUser()
+            ?: throw IllegalStateException("Tutor not found for ID $tutorId")
+    } catch (e: Exception) {
+        println("Failed to load tutor for course $id: ${e.message}")
+        throw e
+    }
 
     val lessonEntities = lessonDao.getLessonsForCourse(id)
-    val lessons = lessonEntities.map { it.toLessonWithPages(lessonPageDao) }
+    val lessons = lessonEntities.map { lessonEntity ->
+        try {
+            lessonEntity.toLesson(lessonPageDao)
+        } catch (e: Exception) {
+            println("Failed to convert lesson ${lessonEntity.id} for course $id: ${e.message}")
+            throw e
+        }
+    }
 
     val quizEntity = quizDao.getQuizForCourse(id)
-    val quizQuestions = quizEntity?.let { quizQuestionDao.getQuestionsForQuiz(it.id) } ?: emptyList()
-    val quizSubmissions = quizSubmissionDao.getSubmissionsForCourse(id)
-
     val quiz = quizEntity?.let {
-        Quiz(
-            id = it.id,
-            courseId = id,
-            questions = quizQuestions.map { q -> q.toModel() },
-            submissions = quizSubmissions.map { s -> s.toModel() }
-        )
+        try {
+            val quizQuestions = quizQuestionDao.getQuestionsForQuiz(it.id)
+            val quizSubmissions = quizSubmissionDao.getSubmissionsForCourse(id)
+            Quiz(
+                id = it.id,
+                courseId = id,
+                questions = quizQuestions.map { q -> q.toModel() },
+                submissions = quizSubmissions.map { s -> s.toModel() }
+            )
+        } catch (e: Exception) {
+            println("Failed to load quiz for course $id: ${e.message}")
+            null
+        }
     }
 
     return Course(
@@ -44,6 +60,7 @@ suspend fun CourseEntity.toCourseWithLessons(
 }
 
 fun Course.toEntity(): CourseEntity {
+    println("Converting Course to CourseEntity: id=$id")
     return CourseEntity(
         id = this.id,
         title = this.title,
