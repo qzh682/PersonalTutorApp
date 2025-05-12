@@ -17,7 +17,6 @@ import androidx.navigation.NavController
 import com.example.personaltutorapp.model.QuizQuestion
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
-import java.util.Random
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,37 +38,6 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
 
     val coroutineScope = rememberCoroutineScope()
 
-    // Automatically generate true/false questions when the screen loads
-    LaunchedEffect(course) {
-        if (course != null && questions.isEmpty()) {
-            println("Generating true/false questions for course $courseId with ${course.lessons.size} lessons")
-            val random = Random()
-            course.lessons.forEach { lesson ->
-                repeat(1) { // 1 question per lesson
-                    val num1 = random.nextInt(50) + 1 // Random number between 1 and 50
-                    val num2 = random.nextInt(50) + 1 // Random number between 1 and 50
-                    val correctSum = num1 + num2
-                    val isCorrect = random.nextBoolean() // Randomly decide if the statement is true or false
-                    val displayedSum = if (isCorrect) correctSum else correctSum + random.nextInt(10) - 5
-                    val question = "For Lesson ${lesson.title}: $num1 + $num2 = $displayedSum. Is this correct?"
-
-                    // Fixed options for true/false question
-                    val options = listOf("是", "否")
-                    val correctAnswerIndex = if (isCorrect) 0 else 1 // 0 for "是", 1 for "否"
-
-                    val newQuestion = QuizQuestion(
-                        id = UUID.randomUUID().toString(),
-                        question = question,
-                        options = options,
-                        correctAnswerIndex = correctAnswerIndex
-                    )
-                    questions.add(newQuestion)
-                    println("Generated question: $question, Correct answer: ${options[correctAnswerIndex]}")
-                }
-            }
-        }
-    }
-
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -88,18 +56,18 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                 }
             )
 
-            // If course or lessons are not available, show a message
-            if (course == null || course.lessons.isEmpty()) {
+            // If course is not available, show a message
+            if (course == null) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (course == null) "Course not found" else "No lessons available for this course",
+                        text = "Course not found",
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.semantics {
-                            testTag = "no_lessons_text"
-                            contentDescription = if (course == null) "Course not found" else "No lessons available"
+                            testTag = "no_course_text"
+                            contentDescription = "Course not found"
                         }
                     )
                 }
@@ -186,7 +154,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                                                 questionText = question.question
                                                 correctAnswer = if (question.correctAnswerIndex == 0) "是" else "否"
                                                 editingQuestionIndex = index
-                                                println("Editing question $index: ${question.question}")
+                                                println("Editing question $index: ${question.question}, Options: ${question.options}, Correct: ${question.correctAnswerIndex}")
                                             },
                                             modifier = Modifier.semantics {
                                                 testTag = "edit_button_$index"
@@ -215,7 +183,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                 } else {
                     // Debug log if no questions are added
                     LaunchedEffect(Unit) {
-                        println("No questions generated for courseId: $courseId")
+                        println("No questions added for courseId: $courseId")
                     }
                 }
 
@@ -243,17 +211,18 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                         try {
                             val newQuestion = QuizQuestion(
                                 id = UUID.randomUUID().toString(),
+                                quizId = "", // Placeholder; will be set in addQuizToCourse
                                 question = questionText,
                                 options = options,
                                 correctAnswerIndex = correctAnswerIndex
                             )
                             if (editingQuestionIndex != null) {
                                 questions[editingQuestionIndex!!] = newQuestion
-                                println("Updated question $editingQuestionIndex: ${newQuestion.question}")
+                                println("Updated question $editingQuestionIndex: ${newQuestion.question}, Options: ${newQuestion.options}, Correct: ${newQuestion.correctAnswerIndex}")
                                 editingQuestionIndex = null
                             } else {
                                 questions.add(newQuestion)
-                                println("Added question: ${newQuestion.question}")
+                                println("Added question: ${newQuestion.question}, Options: ${newQuestion.options}, Correct: ${newQuestion.correctAnswerIndex}")
                             }
 
                             // 重置输入字段

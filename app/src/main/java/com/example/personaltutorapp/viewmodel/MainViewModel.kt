@@ -56,6 +56,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val courses = entities.map {
                 val courseWithLessons = it.toCourseWithLessons(userDao, lessonDao, lessonPageDao, quizDao, quizQuestionDao, quizSubmissionDao)
                 logInfo("Refreshed course: ${courseWithLessons.id}, Quiz: ${courseWithLessons.quiz != null}, Published: ${courseWithLessons.quiz?.isPublished}")
+                if (courseWithLessons.quiz != null) {
+                    courseWithLessons.quiz.questions.forEachIndexed { index, question ->
+                        logInfo("Course ${courseWithLessons.id} Quiz Question ${index + 1}: ${question.question}, Options: ${question.options}, Correct: ${question.correctAnswerIndex}")
+                    }
+                }
                 courseWithLessons
             }
             _allCourses.value = courses
@@ -637,14 +642,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            // Check if a quiz already exists
+            // Log the questions being saved
+            questions.forEachIndexed { index, question ->
+                logInfo("Saving quiz question ${index + 1} for course $courseId: ${question.question}, Options: ${question.options}, Correct: ${question.correctAnswerIndex}")
+            }
+
             var quizEntity: QuizEntity
             val existingQuiz = quizDao.getQuizForCourse(courseId)
             if (existingQuiz != null) {
                 logInfo("Quiz already exists for course $courseId, updating quiz questions")
-                // Delete existing questions
                 quizDao.deleteQuestionsForQuiz(existingQuiz.id)
-                quizEntity = existingQuiz.copy(isPublished = false) // Reset published status
+                quizEntity = existingQuiz.copy(isPublished = false)
                 quizDao.updateQuiz(quizEntity)
             } else {
                 logInfo("No existing quiz for course $courseId, creating new quiz")
@@ -657,12 +665,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 quizDao.insertQuiz(quizEntity)
             }
 
-            // Insert new questions
             val questionEntities = questions.map { it.toEntity(quizEntity.id) }
             quizQuestionDao.insertAllWithValidation(questionEntities)
             logInfo("Inserted ${questionEntities.size} questions for quiz ${quizEntity.id}")
 
-            // Refresh courses to reflect the updated quiz
+            // Verify the questions were saved correctly
+            val savedQuestions = quizQuestionDao.getQuestionsForQuiz(quizEntity.id)
+            savedQuestions.forEachIndexed { index, question ->
+                logInfo("Saved quiz question ${index + 1} for quiz ${quizEntity.id}: ${question.question}, Options: ${question.options}, Correct: ${question.correctAnswerIndex}")
+            }
+
             refreshAllCourses()
             logInfo("Quiz added/updated for course $courseId successfully")
             onResult(Result.success(quizEntity))

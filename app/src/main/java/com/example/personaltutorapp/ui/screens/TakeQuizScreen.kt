@@ -27,9 +27,14 @@ fun TakeQuizScreen(courseId: String, navController: NavController, viewModel: Ma
     var submittedScore by remember { mutableStateOf<Int?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
-    // Debug log to confirm screen is loaded
+    // Debug log to confirm screen is loaded and questions displayed
     LaunchedEffect(Unit) {
         println("INFO: TakeQuizScreen loaded for courseId: $courseId, quiz: ${quiz?.id}")
+        if (quiz != null) {
+            quiz.questions.forEachIndexed { index, question ->
+                println("INFO: Student sees question ${index + 1}: ${question.question}, Options: ${question.options}, Correct: ${question.correctAnswerIndex}")
+            }
+        }
         if (currentUser != null && quiz != null) {
             // Check if the user has already submitted a result
             val submissions = viewModel.getQuizResults(courseId)
