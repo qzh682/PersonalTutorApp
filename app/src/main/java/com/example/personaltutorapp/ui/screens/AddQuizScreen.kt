@@ -30,11 +30,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
 
     val course = viewModel.getCourseById(courseId)
     var questionText by remember { mutableStateOf("") }
-    var optionA by remember { mutableStateOf("") }
-    var optionB by remember { mutableStateOf("") }
-    var optionC by remember { mutableStateOf("") }
-    var optionD by remember { mutableStateOf("") }
-    var correctAnswer by remember { mutableStateOf("A") }
+    var correctAnswer by remember { mutableStateOf("是") }
     val questions = remember { mutableStateListOf<QuizQuestion>() }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
@@ -43,40 +39,32 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
 
     val coroutineScope = rememberCoroutineScope()
 
-    // Automatically generate addition questions when the screen loads
+    // Automatically generate true/false questions when the screen loads
     LaunchedEffect(course) {
         if (course != null && questions.isEmpty()) {
-            println("Generating addition questions for course $courseId with ${course.lessons.size} lessons")
+            println("Generating true/false questions for course $courseId with ${course.lessons.size} lessons")
             val random = Random()
             course.lessons.forEach { lesson ->
                 repeat(1) { // 1 question per lesson
                     val num1 = random.nextInt(50) + 1 // Random number between 1 and 50
                     val num2 = random.nextInt(50) + 1 // Random number between 1 and 50
                     val correctSum = num1 + num2
-                    val question = "What is $num1 + $num2 for Lesson ${lesson.title}?"
+                    val isCorrect = random.nextBoolean() // Randomly decide if the statement is true or false
+                    val displayedSum = if (isCorrect) correctSum else correctSum + random.nextInt(10) - 5
+                    val question = "For Lesson ${lesson.title}: $num1 + $num2 = $displayedSum. Is this correct?"
 
-                    // Generate incorrect options
-                    val incorrectOptions = mutableListOf<Int>()
-                    while (incorrectOptions.size < 3) {
-                        val incorrectSum = correctSum + random.nextInt(10) - 5 // Generate a number close to the correct sum
-                        if (incorrectSum != correctSum && incorrectSum > 0 && incorrectSum !in incorrectOptions) {
-                            incorrectOptions.add(incorrectSum)
-                        }
-                    }
-
-                    // Randomly place the correct answer among the options
-                    val options = mutableListOf(correctSum, incorrectOptions[0], incorrectOptions[1], incorrectOptions[2])
-                    options.shuffle()
-                    val correctAnswerIndex = options.indexOf(correctSum)
+                    // Fixed options for true/false question
+                    val options = listOf("是", "否")
+                    val correctAnswerIndex = if (isCorrect) 0 else 1 // 0 for "是", 1 for "否"
 
                     val newQuestion = QuizQuestion(
                         id = UUID.randomUUID().toString(),
                         question = question,
-                        options = options.map { it.toString() },
+                        options = options,
                         correctAnswerIndex = correctAnswerIndex
                     )
                     questions.add(newQuestion)
-                    println("Generated question: $question, Correct answer: $correctSum")
+                    println("Generated question: $question, Correct answer: ${options[correctAnswerIndex]}")
                 }
             }
         }
@@ -134,60 +122,6 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                             isError = questionText.isBlank() && errorMessage != null
                         )
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = optionA,
-                            onValueChange = { optionA = it },
-                            label = { Text("Option A") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .semantics {
-                                    testTag = "option_a_field"
-                                    contentDescription = "Option A input"
-                                },
-                            isError = optionA.isBlank() && errorMessage != null
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = optionB,
-                            onValueChange = { optionB = it },
-                            label = { Text("Option B") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .semantics {
-                                    testTag = "option_b_field"
-                                    contentDescription = "Option B input"
-                                },
-                            isError = optionB.isBlank() && errorMessage != null
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = optionC,
-                            onValueChange = { optionC = it },
-                            label = { Text("Option C") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .semantics {
-                                    testTag = "option_c_field"
-                                    contentDescription = "Option C input"
-                                },
-                            isError = optionC.isBlank() && errorMessage != null
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = optionD,
-                            onValueChange = { optionD = it },
-                            label = { Text("Option D") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .semantics {
-                                    testTag = "option_d_field"
-                                    contentDescription = "Option D input"
-                                },
-                            isError = optionD.isBlank() && errorMessage != null
-                        )
-
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
@@ -199,7 +133,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                             }
                         )
                         Row {
-                            listOf("A", "B", "C", "D").forEach { option ->
+                            listOf("是", "否").forEach { option ->
                                 Row(
                                     modifier = Modifier
                                         .padding(end = 16.dp)
@@ -221,7 +155,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                     }
                 }
 
-                // 显示已添加的问题预览（删除 "Questions Added" 文本）
+                // 显示已添加的问题预览
                 if (questions.isNotEmpty()) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -250,17 +184,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                                         IconButton(
                                             onClick = {
                                                 questionText = question.question
-                                                optionA = question.options[0]
-                                                optionB = question.options[1]
-                                                optionC = question.options[2]
-                                                optionD = question.options[3]
-                                                correctAnswer = when (question.correctAnswerIndex) {
-                                                    0 -> "A"
-                                                    1 -> "B"
-                                                    2 -> "C"
-                                                    3 -> "D"
-                                                    else -> "A"
-                                                }
+                                                correctAnswer = if (question.correctAnswerIndex == 0) "是" else "否"
                                                 editingQuestionIndex = index
                                                 println("Editing question $index: ${question.question}")
                                             },
@@ -307,29 +231,14 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                 Button(
                     onClick = {
                         // 验证输入
-                        if (questionText.isBlank() || optionA.isBlank() || optionB.isBlank() ||
-                            optionC.isBlank() || optionD.isBlank()) {
-                            errorMessage = "Please fill all fields"
-                            println("Validation failed: All fields must be filled")
+                        if (questionText.isBlank()) {
+                            errorMessage = "Please fill the question field"
+                            println("Validation failed: Question field must be filled")
                             return@Button
                         }
 
-                        // 检查选项是否重复
-                        val options = listOf(optionA, optionB, optionC, optionD)
-                        val distinctOptions = options.distinct()
-                        if (distinctOptions.size != options.size) {
-                            errorMessage = "Options must be unique"
-                            println("Validation failed: Options must be unique")
-                            return@Button
-                        }
-
-                        val correctAnswerIndex = when (correctAnswer) {
-                            "A" -> 0
-                            "B" -> 1
-                            "C" -> 2
-                            "D" -> 3
-                            else -> 0
-                        }
+                        val options = listOf("是", "否")
+                        val correctAnswerIndex = if (correctAnswer == "是") 0 else 1
 
                         try {
                             val newQuestion = QuizQuestion(
@@ -349,11 +258,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
 
                             // 重置输入字段
                             questionText = ""
-                            optionA = ""
-                            optionB = ""
-                            optionC = ""
-                            optionD = ""
-                            correctAnswer = "A"
+                            correctAnswer = "是"
                             errorMessage = null
                         } catch (e: IllegalArgumentException) {
                             errorMessage = "Invalid question: ${e.message}"
@@ -392,6 +297,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                                     isLoading = false
                                     result.onSuccess {
                                         println("Quiz saved successfully for course $courseId with ${questions.size} questions")
+                                        navController.popBackStack() // Navigate back after saving
                                     }.onFailure { e ->
                                         errorMessage = "Failed to save quiz: ${e.message}"
                                         println("Failed to save quiz: ${e.message}")
