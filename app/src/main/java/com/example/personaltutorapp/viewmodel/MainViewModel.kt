@@ -5,15 +5,19 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.Transaction
 import com.example.personaltutorapp.data.AppDatabase
+import com.example.personaltutorapp.data.dao.*
 import com.example.personaltutorapp.model.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
-import androidx.room.Transaction
-import kotlinx.coroutines.delay
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -25,6 +29,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val quizDao = db.quizDao()
     private val quizQuestionDao = db.quizQuestionDao()
     private val quizSubmissionDao = db.quizSubmissionDao()
+    private val availabilityDao = db.availabilityDao() // 保留第二个版本的 DAO
+    private val bookingDao = db.bookingDao() // 保留第二个版本的 DAO
 
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser
@@ -35,6 +41,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _userByEmail = MutableStateFlow<User?>(null)
     val userByEmail: StateFlow<User?> = _userByEmail.asStateFlow()
 
+    // 保留第二个版本的 bookings 状态
+    private val _studentBookings = MutableStateFlow<List<BookingEntity>>(emptyList())
+    val studentBookings: StateFlow<List<BookingEntity>> = _studentBookings.asStateFlow()
+
+    private val _tutorBookings = MutableStateFlow<List<BookingEntity>>(emptyList())
+    val tutorBookings: StateFlow<List<BookingEntity>> = _tutorBookings.asStateFlow()
+
     private val appContext = application.applicationContext
 
     init {
@@ -42,12 +55,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 insertTestUsers()
                 refreshAllCourses()
+                insertTestAvailability() // 保留第二个版本的日历测试数据
             } catch (e: Exception) {
                 logError("Initialization failed: ${e.message}")
             }
         }
     }
 
+    // 保留第二个版本的 insertTestAvailability 方法
+    private suspend fun insertTestAvailability() {
+        val tutor = userDao.getUserByEmail("test_tutor@example.com")?.toUser() ?: run {
+            val testTutor = User(
+                id = UUID.randomUUID().toString(),
+                email = "test_tutor@example.com",
+                password = "test123",
+                displayName = "Test Tutor",
+                role = "Tutor",
+                bio = "",
+                profileImageUrl = ""
+            )
+            userDao.insertUser(testTutor.toEntity())
+            testTutor
+        }
+
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.DAY_OF_MONTH, 1)
+        val startTime = calendar.time
+        calendar.add(Calendar.MINUTE, 30)
+        val endTime = calendar.time
+
+        val testAvailability = AvailabilityEntity(
+            id = UUID.randomUUID().toString(),
+            tutorId = tutor.id,
+            startTime = startTime,
+            endTime = endTime,
+            isBooked = false
+        )
+        availabilityDao.insertAvailability(testAvailability)
+    }
+
+    // 保留第一个版本的 refreshAllCourses 方法（包含详细日志）
     suspend fun refreshAllCourses(): Result<Unit> {
         return try {
             // Invalidate Room's query cache by closing and reopening the database
@@ -73,10 +120,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun getCourseById(courseId: String): Course? {
-        return _allCourses.value.find { it.id == courseId }
-    }
-
     private fun insertTestUsers() = viewModelScope.launch {
         val testUsers = listOf(
             User(
@@ -96,14 +139,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 role = "Student",
                 bio = "",
                 profileImageUrl = ""
+            ),
+            // 保留第二个版本的测试导师
+            User(
+                id = UUID.randomUUID().toString(),
+                email = "test_tutor@example.com",
+                password = "test123",
+                displayName = "Test Tutor",
+                role = "Tutor",
+                bio = "",
+                profileImageUrl = ""
             )
         )
         testUsers.forEach { user ->
             try {
                 userDao.insertUser(user.toEntity())
-                logInfo("Inserted test user: ${user.email}")
+                logInfo("Inserted test user: ${user.email}") // 保留第一个版本的日志
             } catch (e: Exception) {
-                logError("Failed to insert test user ${user.email}: ${e.message}")
+                logError("Failed to insert test user ${user.email}: ${e.message}") // 保留第一个版本的日志
             }
         }
     }
@@ -273,7 +326,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun getCoursesForCurrentUser(): List<Course> {
         val tutorId = _currentUser.value?.id ?: return emptyList()
-        return _allCourses.value.filter { it.tutor.id == tutorId }
+        return _allCourses.value.filter { course -> course.tutor.id == tutorId }
+    }
+
+    fun getCourseById(courseId: String): Course? {
+        return _allCourses.value.find { course -> course.id == courseId }
     }
 
     fun addLessonToCourse(courseId: String, title: String, pages: List<LessonPage>, onResult: (Result<LessonEntity>) -> Unit) = viewModelScope.launch {
@@ -456,7 +513,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun getPendingRequests(courseId: String): List<User> {
         val course = getCourseById(courseId)
-        return course?.pendingUserIds?.mapNotNull { userDao.getUserById(it)?.toUser() } ?: emptyList()
+        return course?.pendingUserIds?.mapNotNull { userId ->
+            userDao.getUserById(userId)?.toUser()
+        } ?: emptyList()
     }
 
     fun acceptEnrollment(courseId: String, userId: String, onResult: (Result<Unit>) -> Unit) = viewModelScope.launch {
@@ -564,6 +623,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // 保留第一个版本的 Quiz 相关逻辑
     data class QuizResult(val studentName: String, val score: Int, val total: Int)
 
     suspend fun getQuizResults(courseId: String): List<QuizResult> {
@@ -818,14 +878,112 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun deleteTestUser(email: String) {
         try {
             val user = db.userDao().getUserByEmail(email)
-            user?.let { userDao.deleteUser(it) }
-            logInfo("Deleted test user: $email")
+            user?.let { userEntity ->
+                userDao.deleteUser(userEntity)
+                logInfo("Deleted test user: $email")
+            }
         } catch (e: Exception) {
             logError("Failed to delete test user $email: ${e.message}")
         }
     }
 
-    // Helper methods for logging
+    // 保留第二个版本的日历相关方法
+    suspend fun getAvailableSlotsForTutor(tutorId: String): List<AvailabilityEntity> {
+        return try {
+            availabilityDao.getAvailableSlots(tutorId)
+        } catch (e: Exception) {
+            logError("Failed to get available slots for tutor $tutorId: ${e.message}")
+            emptyList()
+        }
+    }
+
+    fun saveAvailability(availability: AvailabilityEntity, onResult: (Result<Unit>) -> Unit) = viewModelScope.launch {
+        try {
+            availabilityDao.insertAvailability(availability)
+            logInfo("Saved availability for tutor ${availability.tutorId}: ${availability.startTime} to ${availability.endTime}")
+            onResult(Result.success(Unit))
+        } catch (e: Exception) {
+            logError("Failed to save availability for tutor ${availability.tutorId}: ${e.message}")
+            onResult(Result.failure(e))
+        }
+    }
+
+    fun bookSlot(availability: AvailabilityEntity, studentId: String, onResult: (Result<Unit>) -> Unit) = viewModelScope.launch {
+        try {
+            if (availability.isBooked) {
+                logError("Time slot already booked: ${availability.id}")
+                onResult(Result.failure(Exception("Time slot already booked")))
+                return@launch
+            }
+
+            val updatedAvailability = availability.copy(isBooked = true)
+            availabilityDao.updateAvailability(updatedAvailability)
+
+            val booking = BookingEntity(
+                id = UUID.randomUUID().toString(),
+                availabilityId = availability.id,
+                studentId = studentId,
+                tutorId = availability.tutorId,
+                startTime = availability.startTime,
+                endTime = availability.endTime
+            )
+            bookingDao.insertBooking(booking)
+
+            logInfo("Booked slot for student $studentId with tutor ${availability.tutorId}: ${availability.startTime} to ${availability.endTime}")
+            onResult(Result.success(Unit))
+        } catch (e: Exception) {
+            logError("Failed to book slot for student $studentId: ${e.message}")
+            onResult(Result.failure(e))
+        }
+    }
+
+    fun loadStudentBookings(studentId: String) {
+        viewModelScope.launch {
+            try {
+                _studentBookings.value = bookingDao.getBookingsForStudent(studentId)
+            } catch (e: Exception) {
+                logError("Failed to get bookings for student $studentId: ${e.message}")
+                _studentBookings.value = emptyList()
+            }
+        }
+    }
+
+    fun loadTutorBookings(tutorId: String) {
+        viewModelScope.launch {
+            try {
+                _tutorBookings.value = bookingDao.getBookingsForTutor(tutorId)
+            } catch (e: Exception) {
+                logError("Failed to get bookings for tutor $tutorId: ${e.message}")
+                _tutorBookings.value = emptyList()
+            }
+        }
+    }
+
+    fun cancelBooking(booking: BookingEntity, onResult: (Result<Unit>) -> Unit) = viewModelScope.launch {
+        try {
+            val availability = availabilityDao.getAvailabilityById(booking.availabilityId)
+            if (availability != null) {
+                val updatedAvailability = availability.copy(isBooked = false)
+                availabilityDao.updateAvailability(updatedAvailability)
+                logInfo("Updated availability ${availability.id} to unbooked status")
+            } else {
+                logError("Availability ${booking.availabilityId} not found for booking ${booking.id}")
+            }
+            bookingDao.deleteBooking(booking)
+            logInfo("Cancelled booking for student ${booking.studentId} with tutor ${booking.tutorId}")
+            booking.studentId?.let { studentId ->
+                loadStudentBookings(studentId)
+            }
+            booking.tutorId?.let { tutorId ->
+                loadTutorBookings(tutorId)
+            }
+            onResult(Result.success(Unit))
+        } catch (e: Exception) {
+            logError("Failed to cancel booking for student ${booking.studentId}: ${e.message}")
+            onResult(Result.failure(e))
+        }
+    }
+
     private fun logInfo(message: String) {
         println("INFO: $message")
     }

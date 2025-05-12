@@ -29,7 +29,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
 
     val course = viewModel.getCourseById(courseId)
     var questionText by remember { mutableStateOf("") }
-    var correctAnswer by remember { mutableStateOf("是") }
+    var correctAnswer by remember { mutableStateOf("Yes") }
     val questions = remember { mutableStateListOf<QuizQuestion>() }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
@@ -101,7 +101,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                             }
                         )
                         Row {
-                            listOf("是", "否").forEach { option ->
+                            listOf("Yes", "No").forEach { option ->
                                 Row(
                                     modifier = Modifier
                                         .padding(end = 16.dp)
@@ -152,7 +152,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                                         IconButton(
                                             onClick = {
                                                 questionText = question.question
-                                                correctAnswer = if (question.correctAnswerIndex == 0) "是" else "否"
+                                                correctAnswer = if (question.correctAnswerIndex == 0) "Yes" else "No"
                                                 editingQuestionIndex = index
                                                 println("Editing question $index: ${question.question}, Options: ${question.options}, Correct: ${question.correctAnswerIndex}")
                                             },
@@ -205,8 +205,8 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
                             return@Button
                         }
 
-                        val options = listOf("是", "否")
-                        val correctAnswerIndex = if (correctAnswer == "是") 0 else 1
+                        val options = listOf("Yes", "No")
+                        val correctAnswerIndex = if (correctAnswer == "Yes") 0 else 1
 
                         try {
                             val newQuestion = QuizQuestion(
@@ -227,7 +227,7 @@ fun AddQuizScreen(courseId: String, navController: NavController, viewModel: Mai
 
                             // 重置输入字段
                             questionText = ""
-                            correctAnswer = "是"
+                            correctAnswer = "Yes"
                             errorMessage = null
                         } catch (e: IllegalArgumentException) {
                             errorMessage = "Invalid question: ${e.message}"

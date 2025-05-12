@@ -3,6 +3,10 @@ package com.example.personaltutorapp.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.personaltutorapp.model.Course
 import com.example.personaltutorapp.model.User
+import com.example.personaltutorapp.model.BookingEntity
 import com.example.personaltutorapp.navigation.NavRoutes
 import com.example.personaltutorapp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
@@ -25,6 +30,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.shape.CircleShape
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Composable
 fun TutorDashboard(
@@ -35,28 +42,49 @@ fun TutorDashboard(
     val courses = viewModel.getCoursesForCurrentUser()
     val pendingUsersMap = remember { mutableStateMapOf<String, List<User>>() }
     val loadingUsers = remember { mutableStateMapOf<String, Boolean>() }
+    val bookings by viewModel.tutorBookings.collectAsState()
     val coroutineScope = rememberCoroutineScope()
-    var isLoading by remember { mutableStateOf(true) }
+    var isLoadingCourses by remember { mutableStateOf(true) }
+    var isLoadingBookings by remember { mutableStateOf(true) }
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
+    var bookingError by remember { mutableStateOf<String?>(null) }
 
-    // Load pending users for each course
-    LaunchedEffect(courses) {
-        isLoading = true
+    // Function to refresh pending users for a specific course
+    fun refreshPendingUsers(courseId: String) {
+        coroutineScope.launch {
+            val users = viewModel.getPendingRequests(courseId)
+            pendingUsersMap[courseId] = users
+            println("Refreshed pending users for course $courseId: ${users.map { it.displayName }}")
+        }
+    }
+
+    // Load tutor's bookings and pending users
+    LaunchedEffect(currentUser?.id) {
+        if (currentUser?.id == null) {
+            isLoadingCourses = false
+            isLoadingBookings = false
+            bookingError = null
+            return@LaunchedEffect
+        }
+        isLoadingCourses = true
+        isLoadingBookings = true
         try {
+            // Load pending users for each course
             courses.forEach { course ->
-                coroutineScope.launch {
-                    val users = course.pendingUserIds.mapNotNull { userId ->
-                        viewModel.getUserById(userId)
-                    }
-                    pendingUsersMap[course.id] = users
-                    println("Loaded ${users.size} pending users for course ${course.id}")
-                }
+                refreshPendingUsers(course.id)
+            }
+            // Load tutor's bookings
+            currentUser?.id?.let { tutorId ->
+                viewModel.loadTutorBookings(tutorId)
+                bookingError = null
             }
         } catch (e: Exception) {
-            snackbarMessage = "Failed to load pending requests: ${e.message}"
-            println("Failed to load pending requests: ${e.message}")
+            snackbarMessage = "Failed to load pending requests or bookings: ${e.message}"
+            println("Failed to load pending requests or bookings: ${e.message}")
+            bookingError = "Failed to load bookings: ${e.message}"
         } finally {
-            isLoading = false
+            isLoadingCourses = false
+            isLoadingBookings = false
         }
     }
 
@@ -64,19 +92,20 @@ fun TutorDashboard(
         Column(
             modifier = Modifier
                 .padding(16.dp)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // 显示用户头像
+                // Display user profile image
                 currentUser?.profileImageUrl?.let { url ->
                     val painter = rememberAsyncImagePainter(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(url)
-                            .size(48, 48) // 头像大小
+                            .size(48, 48)
                             .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
                             .diskCachePolicy(coil.request.CachePolicy.ENABLED)
                             .allowHardware(false)
@@ -100,18 +129,8 @@ fun TutorDashboard(
                     Spacer(modifier = Modifier.width(12.dp))
                 }
 
-                currentUser?.let { user ->
-                    Text(
-                        text = "Welcome, ${user.displayName}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.semantics {
-                            testTag = "welcome_text"
-                            contentDescription = "Welcome message for ${user.displayName}"
-                        }
-                    )
-                } ?: Text(
-                    text = "Welcome, Tutor",
+                Text(
+                    text = "Welcome, ${currentUser?.displayName ?: "Tutor"}",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.semantics {
@@ -135,9 +154,84 @@ fun TutorDashboard(
                 Text("Create New Course")
             }
 
-            if (isLoading) {
+            Button(
+                onClick = {
+                    val tutorId = currentUser?.id
+                    if (tutorId != null) {
+                        navController.navigate(NavRoutes.TutorAvailability.createRoute(tutorId))
+                    } else {
+                        snackbarMessage = "Failed to set availability: User not logged in"
+                        println("Failed to set availability: User not logged in")
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .semantics {
+                        testTag = "set_availability_button"
+                        contentDescription = "Set availability"
+                    },
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Text("Set Availability")
+            }
+
+            Text(
+                text = "Your Scheduled Meetings",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.semantics {
+                    testTag = "meetings_title"
+                    contentDescription = "Your scheduled meetings"
+                }
+            )
+
+            if (isLoadingBookings) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.semantics {
+                            testTag = "loading_meetings_indicator"
+                            contentDescription = "Loading meetings"
+                        }
+                    )
+                }
+            } else if (bookingError != null) {
+                Text(
+                    text = bookingError ?: "Error loading meetings",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics {
+                        testTag = "meeting_error_text"
+                        contentDescription = "Meeting error message"
+                    }
+                )
+            } else if (bookings.isEmpty()) {
+                Text(
+                    text = "No meetings scheduled",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.semantics {
+                        testTag = "no_meetings_text"
+                        contentDescription = "No meetings scheduled"
+                    }
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .heightIn(max = 300.dp)
+                        .fillMaxWidth()
+                ) {
+                    items(bookings) { booking ->
+                        MeetingCard(booking = booking)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+
+            if (isLoadingCourses) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
@@ -209,7 +303,6 @@ fun TutorDashboard(
                                     }
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                // Display quiz status
                                 Text(
                                     text = when {
                                         course.quiz == null -> "No Quiz Available"
@@ -318,97 +411,107 @@ fun TutorDashboard(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            pendingUsers.forEach { pendingUser ->
-                                ElevatedCard(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .semantics {
-                                            testTag = "pending_user_${pendingUser.id}_${course.id}"
-                                            contentDescription = "Pending request for ${pendingUser.displayName}"
-                                        },
-                                    shape = MaterialTheme.shapes.medium,
-                                    colors = CardDefaults.elevatedCardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                ) {
-                                    Row(
+                            LazyColumn(
+                                modifier = Modifier
+                                    .heightIn(max = 300.dp)
+                                    .fillMaxWidth()
+                            ) {
+                                items(pendingUsers) { pendingUser ->
+                                    ElevatedCard(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            text = pendingUser.displayName,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .semantics {
-                                                    testTag = "pending_user_name_${pendingUser.id}_${course.id}"
-                                                    contentDescription = "User: ${pendingUser.displayName}"
-                                                }
+                                            .padding(vertical = 4.dp)
+                                            .semantics {
+                                                testTag = "pending_user_${pendingUser.id}_${course.id}"
+                                                contentDescription = "Pending request for ${pendingUser.displayName}"
+                                            },
+                                        shape = MaterialTheme.shapes.medium,
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant
                                         )
-                                        Row {
-                                            TextButton(
-                                                onClick = {
-                                                    loadingUsers[pendingUser.id] = true
-                                                    coroutineScope.launch {
-                                                        viewModel.acceptEnrollment(course.id, pendingUser.id) { result ->
-                                                            loadingUsers[pendingUser.id] = false
-                                                            result.onSuccess {
-                                                                snackbarMessage = "Request from ${pendingUser.displayName} accepted"
-                                                                println("Accepted enrolment for user ${pendingUser.id} in course ${course.id}")
-                                                            }.onFailure { e ->
-                                                                snackbarMessage = "Failed to accept request: ${e.message}"
-                                                                println("Failed to accept enrolment for user ${pendingUser.id}: ${e.message}")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = pendingUser.displayName,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .semantics {
+                                                        testTag = "pending_user_name_${pendingUser.id}_${course.id}"
+                                                        contentDescription = "User: ${pendingUser.displayName}"
+                                                    }
+                                            )
+                                            Row {
+                                                TextButton(
+                                                    onClick = {
+                                                        loadingUsers[pendingUser.id] = true
+                                                        coroutineScope.launch {
+                                                            viewModel.acceptEnrollment(course.id, pendingUser.id) { result ->
+                                                                loadingUsers[pendingUser.id] = false
+                                                                result.onSuccess {
+                                                                    snackbarMessage = "Request from ${pendingUser.displayName} accepted"
+                                                                    println("Accepted enrolment for user ${pendingUser.id} in course ${course.id}")
+                                                                    // Refresh pending users list
+                                                                    refreshPendingUsers(course.id)
+                                                                }.onFailure { e ->
+                                                                    snackbarMessage = "Failed to accept request: ${e.message}"
+                                                                    println("Failed to accept enrolment for user ${pendingUser.id}: ${e.message}")
+                                                                }
                                                             }
                                                         }
+                                                    },
+                                                    modifier = Modifier.semantics {
+                                                        testTag = "accept_button_${pendingUser.id}_${course.id}"
+                                                        contentDescription = "Accept request for ${pendingUser.displayName}"
+                                                    },
+                                                    enabled = loadingUsers[pendingUser.id] != true
+                                                ) {
+                                                    if (loadingUsers[pendingUser.id] == true) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    } else {
+                                                        Text("Accept")
                                                     }
-                                                },
-                                                modifier = Modifier.semantics {
-                                                    testTag = "accept_button_${pendingUser.id}_${course.id}"
-                                                    contentDescription = "Accept request for ${pendingUser.displayName}"
-                                                },
-                                                enabled = loadingUsers[pendingUser.id] != true
-                                            ) {
-                                                if (loadingUsers[pendingUser.id] == true) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                } else {
-                                                    Text("Accept")
                                                 }
-                                            }
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            TextButton(
-                                                onClick = {
-                                                    loadingUsers[pendingUser.id] = true
-                                                    coroutineScope.launch {
-                                                        viewModel.rejectEnrollment(course.id, pendingUser.id) { result ->
-                                                            loadingUsers[pendingUser.id] = false
-                                                            result.onSuccess {
-                                                                snackbarMessage = "Request from ${pendingUser.displayName} rejected"
-                                                                println("Rejected enrolment for user ${pendingUser.id} in course ${course.id}")
-                                                            }.onFailure { e ->
-                                                                snackbarMessage = "Failed to reject request: ${e.message}"
-                                                                println("Failed to reject enrolment for user ${pendingUser.id}: ${e.message}")
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                TextButton(
+                                                    onClick = {
+                                                        loadingUsers[pendingUser.id] = true
+                                                        coroutineScope.launch {
+                                                            viewModel.rejectEnrollment(course.id, pendingUser.id) { result ->
+                                                                loadingUsers[pendingUser.id] = false
+                                                                result.onSuccess {
+                                                                    snackbarMessage = "Request from ${pendingUser.displayName} rejected"
+                                                                    println("Rejected enrolment for user ${pendingUser.id} in course ${course.id}")
+                                                                    // Refresh pending users list
+                                                                    refreshPendingUsers(course.id)
+                                                                }.onFailure { e ->
+                                                                    snackbarMessage = "Failed to reject request: ${e.message}"
+                                                                    println("Failed to reject enrolment for user ${pendingUser.id}: ${e.message}")
+                                                                }
                                                             }
                                                         }
+                                                    },
+                                                    modifier = Modifier.semantics {
+                                                        testTag = "reject_button_${pendingUser.id}_${course.id}"
+                                                        contentDescription = "Reject request for ${pendingUser.displayName}"
+                                                    },
+                                                    enabled = loadingUsers[pendingUser.id] != true
+                                                ) {
+                                                    if (loadingUsers[pendingUser.id] == true) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    } else {
+                                                        Text("Reject")
                                                     }
-                                                },
-                                                modifier = Modifier.semantics {
-                                                    testTag = "reject_button_${pendingUser.id}_${course.id}"
-                                                    contentDescription = "Reject request for ${pendingUser.displayName}"
-                                                },
-                                                enabled = loadingUsers[pendingUser.id] != true
-                                            ) {
-                                                if (loadingUsers[pendingUser.id] == true) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                } else {
-                                                    Text("Reject")
                                                 }
                                             }
                                         }
@@ -421,6 +524,10 @@ fun TutorDashboard(
             }
 
             snackbarMessage?.let { message ->
+                LaunchedEffect(message) {
+                    kotlinx.coroutines.delay(3000)
+                    snackbarMessage = null
+                }
                 Snackbar(
                     modifier = Modifier.padding(top = 8.dp),
                     action = {
@@ -489,5 +596,50 @@ fun ProgressBar(percentage: Int, modifier: Modifier = Modifier) {
                 .height(12.dp)
                 .background(MaterialTheme.colorScheme.primary)
         )
+    }
+}
+
+@Composable
+fun MeetingCard(booking: BookingEntity) {
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                testTag = "meeting_card_${booking.id}"
+                contentDescription = "Meeting from ${dateFormat.format(booking.startTime)} to ${dateFormat.format(booking.endTime)}"
+            },
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = "Start: ${dateFormat.format(booking.startTime)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.semantics {
+                        testTag = "meeting_start_${booking.id}"
+                        contentDescription = "Start time: ${dateFormat.format(booking.startTime)}"
+                    }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "End: ${dateFormat.format(booking.endTime)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.semantics {
+                        testTag = "meeting_end_${booking.id}"
+                        contentDescription = "End time: ${dateFormat.format(booking.endTime)}"
+                    }
+                )
+            }
+        }
     }
 }

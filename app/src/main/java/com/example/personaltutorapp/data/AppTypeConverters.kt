@@ -4,10 +4,14 @@ import androidx.room.TypeConverter
 import com.example.personaltutorapp.model.PageType
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class AppTypeConverters {
 
     private val gson = Gson()
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.getDefault())
 
     @TypeConverter
     fun fromStringList(list: List<String>): String {
@@ -50,6 +54,30 @@ class AppTypeConverters {
         } catch (e: IllegalArgumentException) {
             println("Failed to convert String to PageType: $name, ${e.message}")
             throw e
+        }
+    }
+
+    @TypeConverter
+    fun fromDate(date: Date?): String? {
+        try {
+            val result = date?.let { dateFormat.format(it) }
+            println("Converting Date to String: $date -> $result")
+            return result
+        } catch (e: Exception) {
+            println("Failed to convert Date to String: ${e.message}")
+            return null
+        }
+    }
+
+    @TypeConverter
+    fun toDate(dateString: String?): Date? {
+        try {
+            val result = dateString?.let { dateFormat.parse(it) }
+            println("Converting String to Date: $dateString -> $result")
+            return result
+        } catch (e: Exception) {
+            println("Failed to convert String to Date: ${e.message}")
+            return null
         }
     }
 }

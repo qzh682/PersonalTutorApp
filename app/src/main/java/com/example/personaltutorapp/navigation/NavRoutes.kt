@@ -30,6 +30,7 @@ sealed class NavRoutes(val route: String) {
         }
     }
 
+    // 保留第一个版本的 Quiz 相关部分
     object TakeQuiz : NavRoutes("take_quiz/{courseId}") {
         fun createRoute(courseId: String): String {
             require(courseId.isNotBlank()) { "Course ID cannot be blank" }
@@ -48,6 +49,22 @@ sealed class NavRoutes(val route: String) {
         fun createRoute(courseId: String): String {
             require(courseId.isNotBlank()) { "Course ID cannot be blank" }
             return "add_quiz/$courseId"
+        }
+    }
+
+    // 保留第二个版本的表格日历部分
+    object TutorAvailability : NavRoutes("tutor_availability/{tutorId}") {
+        fun createRoute(tutorId: String): String {
+            require(tutorId.isNotBlank()) { "Tutor ID cannot be blank" }
+            return "tutor_availability/$tutorId"
+        }
+    }
+
+    object StudentBooking : NavRoutes("student_booking/{tutorId}/{studentId}") {
+        fun createRoute(tutorId: String, studentId: String): String {
+            require(tutorId.isNotBlank()) { "Tutor ID cannot be blank" }
+            require(studentId.isNotBlank()) { "Student ID cannot be blank" }
+            return "student_booking/$tutorId/$studentId"
         }
     }
 }
